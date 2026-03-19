@@ -1,0 +1,29 @@
+
+> flea-market-monitor-server@2.0.0-alpha dev
+> nodemon server.js
+
+[33m[nodemon] 3.1.11[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node server.js`[39m
+✅ CROSSMALL API クライアント初期化完了
+  - Account: 3663
+  - API URL: https://crossmall.jp/webapi2
+✅ LINE Messaging API 設定を検出（clientは遅延初期化）
+✅ CROSSMALL API クライアント初期化完了
+  - Account: 3663
+  - API URL: https://crossmall.jp/webapi2
+✅ LINE Messaging API クライアント初期化完了
+✅ Database connection established
+🚀 Server running on http://localhost:3000
+📊 Environment: development
+
+--- スケジューラー設定 ---
+✅ スケジューラー起動完了
+📅 実行間隔: */5 * * * *
+⏰ 次回実行予定: 2026/2/25 9:20:00
+------------------------
+
+�o�b�` �W���u���I�����܂��� (Y/N)? 
+^C

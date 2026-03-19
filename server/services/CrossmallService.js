@@ -1,0 +1,291 @@
+const axios = require('axios');
+const crypto = require('crypto');
+const xml2js = require('xml2js');
+
+/**
+ * CROSSMALL WebAPI サービス（注文データ対応版）
+ * 
+ * 機能:
+ * - 在庫数取得 (get_stock)
+ * - 最後に売れた金額取得 (get_order_detail)
+ */
+class CrossmallService {
+  constructor() {
+    this.config = {
+      apiUrl: process.env.CROSSMALL_API_URL || 'https://crossmall.jp/webapi2',
+      account: process.env.CROSSMALL_ACCOUNT || '3663',
+      authKey: process.env.CROSSMALL_AUTH_KEY || '3O2EP5CPXB'
+    };
+
+    console.log('✅ CROSSMALL API クライアント初期化完了');
+    console.log(`  - Account: ${this.config.account}`);
+    console.log(`  - API URL: ${this.config.apiUrl}`);
+  }
+
+  /**
+   * 商品コードをクリーニング（末尾の n, s を削除）
+   */
+  cleanItemCode(itemCode) {
+    if (!itemCode) return itemCode;
+    return itemCode.replace(/[ns]$/, '');
+  }
+
+  /**
+   * MD5署名を生成（仕様書準拠）
+   */
+  generateSigning(params) {
+    const sortedKeys = Object.keys(params).sort();
+    const parts = sortedKeys.map(key => `${key}=${params[key]}`);
+    const queryString = parts.join('&');
+    const stringToSign = queryString + this.config.authKey;
+    const signing = crypto.createHash('md5').update(stringToSign, 'utf8').digest('hex');
+    
+    if (process.env.DEBUG_CROSSMALL === 'true') {
+      console.log('🔐 署名生成:', { queryString, stringToSign, signing });
+    }
+    
+    return signing;
+  }
+
+  /**
+   * CROSSMALL API リクエスト
+   */
+  async makeRequest(endpoint, params = {}) {
+    try {
+      const requestParams = { account: this.config.account, ...params };
+      const signing = this.generateSigning(requestParams);
+      const finalParams = { ...requestParams, signing };
+
+      const response = await axios.get(`${this.config.apiUrl}/${endpoint}`, {
+        params: finalParams,
+        timeout: 30000,
+        validateStatus: () => true
+      });
+
+      if (response.status !== 200) {
+        console.error(`❌ CROSSMALL API HTTPエラー (${endpoint}): ${response.status}`);
+        return null;
+      }
+
+      const parser = new xml2js.Parser({ explicitArray: false });
+      const result = await parser.parseStringPromise(response.data);
+
+      const resultStatus = this.extractResultStatus(result);
+      if (resultStatus && resultStatus.GetStatus === 'error') {
+        console.error(`❌ CROSSMALL API エラー (${endpoint}): ${resultStatus.Message}`);
+        return null;
+      }
+
+      return result;
+    } catch (error) {
+      console.error(`❌ CROSSMALL API リクエストエラー (${endpoint}):`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * XMLレスポンスからResultStatusを抽出
+   */
+  extractResultStatus(result) {
+    const rootKey = Object.keys(result)[0];
+    const root = result[rootKey];
+    
+    if (root && root.ResultSet && root.ResultSet.ResultStatus) {
+      return root.ResultSet.ResultStatus;
+    }
+    
+    return null;
+  }
+
+  /**
+   * 在庫情報を取得
+   */
+  async getStockInfo(itemCode) {
+    try {
+      console.log(`🔍 CROSSMALL在庫取得開始: ${itemCode}`);
+
+      const result = await this.makeRequest('get_stock', { item_code: itemCode });
+
+      if (!result) {
+        console.log(`⚠️ CROSSMALL在庫情報なし: ${itemCode}`);
+        return null;
+      }
+
+      const resultSet = result.GetStock?.ResultSet;
+      if (!resultSet || !resultSet.Result) {
+        console.log(`⚠️ CROSSMALL在庫データなし: ${itemCode}`);
+        return null;
+      }
+
+      const results = Array.isArray(resultSet.Result) ? resultSet.Result : [resultSet.Result];
+      const firstResult = results[0];
+      
+      const stockInfo = {
+        item_code: firstResult.ItemCode || itemCode,
+        stock: parseInt(firstResult.StockNum || firstResult.stock || 0),
+        item_name: firstResult.ItemName || null
+      };
+
+      console.log(`✅ CROSSMALL在庫取得成功: ${itemCode} - 在庫数: ${stockInfo.stock}`);
+      return stockInfo;
+    } catch (error) {
+      console.error(`❌ CROSSMALL在庫取得エラー: ${itemCode}`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * 過去N日間の注文番号リストを取得
+   */
+  async getOrderNumbers(days = 28) {
+    try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      const formatDate = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
+
+      console.log(`🔍 注文番号取得: ${formatDate(startDate)} ~ ${formatDate(endDate)}`);
+
+      const result = await this.makeRequest('get_order', {
+        order_date_fr: formatDate(startDate),
+        order_date_to: formatDate(endDate)
+      });
+
+      if (!result) {
+        console.log('⚠️ 注文データなし');
+        return [];
+      }
+
+      const resultSet = result.GetOrder?.ResultSet;
+      if (!resultSet || !resultSet.Result) {
+        console.log('⚠️ 注文結果なし');
+        return [];
+      }
+
+      const results = Array.isArray(resultSet.Result) ? resultSet.Result : [resultSet.Result];
+      const orderNumbers = results
+        .map(r => r.OrderNumber)
+        .filter(n => n);
+
+      console.log(`✅ ${orderNumbers.length}件の注文を取得`);
+      return orderNumbers;
+    } catch (error) {
+      console.error('❌ 注文番号取得エラー:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * 注文詳細から商品コードの販売価格を取得
+   */
+  async getOrderDetail(orderNumber) {
+    try {
+      const result = await this.makeRequest('get_order_detail', {
+        order_number: orderNumber
+      });
+
+      if (!result) return [];
+
+      const resultSet = result.GetOrderDetail?.ResultSet;
+      if (!resultSet || !resultSet.Result) return [];
+
+      const results = Array.isArray(resultSet.Result) ? resultSet.Result : [resultSet.Result];
+      
+      return results.map(r => ({
+        item_code: this.cleanItemCode(r.ItemCode || ''),
+        unit_price: parseFloat(r.UnitPrice || 0),
+        order_number: orderNumber
+      }));
+    } catch (error) {
+      console.error(`❌ 注文詳細取得エラー (${orderNumber}):`, error.message);
+      return [];
+    }
+  }
+
+  /**
+   * 最後に売れた金額を取得
+   */
+  async getLastSalePrice(itemCode, days = 28) {
+    try {
+      console.log(`🔍 CROSSMALL販売価格取得開始: ${itemCode} (過去${days}日間)`);
+
+      const cleanedItemCode = this.cleanItemCode(itemCode);
+
+      // 1. 注文番号リストを取得
+      const orderNumbers = await this.getOrderNumbers(days);
+
+      if (orderNumbers.length === 0) {
+        console.log('⚠️ 該当期間に注文なし');
+        return null;
+      }
+
+      // 2. 最新の注文から順に検索
+      for (let i = orderNumbers.length - 1; i >= 0; i--) {
+        const orderNumber = orderNumbers[i];
+        
+        // 50ms待機（API負荷軽減）
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        const details = await this.getOrderDetail(orderNumber);
+
+        // 該当商品を検索
+        const matchedItem = details.find(d => 
+          d.item_code === cleanedItemCode || d.item_code === itemCode
+        );
+
+        if (matchedItem && matchedItem.unit_price > 0) {
+          console.log(`✅ CROSSMALL販売価格取得成功: ${itemCode} - ¥${matchedItem.unit_price} (注文番号: ${orderNumber})`);
+          return matchedItem.unit_price;
+        }
+      }
+
+      console.log(`⚠️ CROSSMALL販売実績なし: ${itemCode}`);
+      return null;
+    } catch (error) {
+      console.error(`❌ CROSSMALL販売価格取得エラー: ${itemCode}`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * 在庫数と最後に売れた金額を同時に取得
+   */
+  async getStockAndPrice(itemCode, days = 28) {
+    try {
+      console.log(`🔍 CROSSMALL在庫・販売価格取得開始: ${itemCode}`);
+
+      // 在庫情報を取得
+      const stockInfo = await this.getStockInfo(itemCode);
+
+      // 販売価格を取得
+      const salePrice = await this.getLastSalePrice(itemCode, days);
+
+      if (!stockInfo && !salePrice) {
+        console.log(`⚠️ CROSSMALL情報なし: ${itemCode}`);
+        return null;
+      }
+
+      const result = {
+        item_code: itemCode,
+        stock: stockInfo?.stock || 0,
+        price: salePrice,
+        item_name: stockInfo?.item_name || null
+      };
+
+      console.log(`✅ CROSSMALL取得完了: ${itemCode} - 在庫: ${result.stock}, 販売価格: ¥${result.price || 'N/A'}`);
+
+      return result;
+    } catch (error) {
+      console.error(`❌ CROSSMALL取得エラー: ${itemCode}`, error.message);
+      return null;
+    }
+  }
+}
+
+module.exports = CrossmallService;
