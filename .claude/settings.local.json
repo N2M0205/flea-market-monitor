@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Skill(update-config)",
-      "Skill(update-config:*)"
+      "Skill(update-config:*)",
+      "Bash(npx pm2:*)",
+      "Bash(pm2 status:*)",
+      "Bash(git add:*)"
     ]
   }
 }
