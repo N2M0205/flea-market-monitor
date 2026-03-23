@@ -171,6 +171,15 @@ class ScrapingService {
       runLog(`✅ 巡回完了: ${keywords.length}キーワード / ${elapsed}秒`);
 
     } finally {
+      // ブラウザを確実に閉じてメモリ解放
+      for (const [name, scraper] of Object.entries(this.scrapers)) {
+        try {
+          if (scraper.cleanup)  await scraper.cleanup();
+          else if (scraper.close) await scraper.close();
+        } catch (e) {
+          console.error(`⚠️ ${name} ブラウザ終了エラー: ${e.message}`);
+        }
+      }
       this.isRunning = false;
       console.log('🔓 isRunning を false にリセットしました');
     }

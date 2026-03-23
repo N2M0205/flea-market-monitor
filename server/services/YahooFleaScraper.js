@@ -29,6 +29,19 @@ class YahooFleaScraper {
   // ブラウザ初期化
   // ─────────────────────────────────────────────
   async initBrowser() {
+    // 前回のブラウザが死んでいたら参照をクリアして再起動
+    if (this.browser) {
+      try {
+        if (!this.browser.isConnected()) {
+          console.log('⚠️ Yahoo!フリマ: 前回のブラウザが切断済み。再起動します');
+          this.browser = null;
+          this.page = null;
+        }
+      } catch (_) {
+        this.browser = null;
+        this.page = null;
+      }
+    }
     if (this.browser) return;
 
     console.log('🌐 Yahoo!フリマ Puppeteerブラウザを起動中...');
@@ -42,6 +55,7 @@ class YahooFleaScraper {
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--disable-gpu',
+        '--single-process',
         '--window-size=1920,1080',
       ],
     });
@@ -282,6 +296,11 @@ class YahooFleaScraper {
 
     } catch (error) {
       console.error('❌ Yahoo!フリマスクレイピングエラー:', error.message);
+      // detached Frame / Connection closed → ブラウザを破棄して次回再起動
+      if (error.message.includes('detached') || error.message.includes('Connection closed') || error.message.includes('Protocol error')) {
+        console.log('🔄 Yahoo!フリマ: クラッシュ検知。ブラウザを破棄します');
+        await this.close();
+      }
       return [];
     }
   }

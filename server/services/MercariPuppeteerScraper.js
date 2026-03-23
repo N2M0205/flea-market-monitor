@@ -35,6 +35,17 @@ class MercariPuppeteerScraper {
   }
 
   async initialize() {
+    // 前回のブラウザが死んでいたら参照をクリア
+    if (this.browser) {
+      try {
+        if (!this.browser.isConnected()) {
+          console.log('⚠️ Mercari: 前回のブラウザが切断済み。再起動します');
+          this.browser = null;
+        }
+      } catch (_) {
+        this.browser = null;
+      }
+    }
     if (this.browser) return;
     await this._killZombieChrome();
 
@@ -45,6 +56,7 @@ class MercariPuppeteerScraper {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
+        '--single-process',
         '--window-size=1366,768',
         '--lang=ja-JP,ja',
       ],
