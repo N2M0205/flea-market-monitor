@@ -123,7 +123,10 @@ class LineNotificationService {
     const price         = Number(product?.price) || 0;
     const purchaseLimit = master?.purchaseLimit != null ? Number(master.purchaseLimit) : null;
     const stock         = crossmallInfo?.stock  != null ? crossmallInfo.stock : (master?.stock ?? null);
-    const sales28       = crossmallInfo?.sales28 != null ? crossmallInfo.sales28 : (master?.sales28 ?? null);
+    // sales28: CROSSMALL APIが0を返す場合はマスターキャッシュにフォールバック
+    const sales28       = (crossmallInfo?.sales28 != null && crossmallInfo.sales28 > 0)
+      ? crossmallInfo.sales28
+      : (master?.sales28 ?? crossmallInfo?.sales28 ?? null);
     const lastSalePrice = crossmallInfo?.price  != null ? Number(crossmallInfo.price) : null;
 
     // プラットフォーム名

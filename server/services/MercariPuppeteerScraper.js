@@ -155,12 +155,16 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       // ── パターン3: a[href*="/item/m"] ───────────────────────────
       if (!items.length) {
         const links = await page.$$eval('a[href*="/item/m"]', els =>
-          [...new Map(els.map(e => [e.href, e])).values()].slice(0, 40).map(el => ({
-            url:      el.href,
-            title:    el.querySelector('img')?.alt || el.textContent?.trim() || '',
-            image:    el.querySelector('img')?.src || '',
-            priceRaw: el.querySelector('[class*="price"], [class*="Price"]')?.textContent || '',
-          }))
+          [...new Map(els.map(e => [e.href, e])).values()].slice(0, 40).map(el => {
+            let title = el.querySelector('img')?.alt || el.textContent?.trim() || '';
+            title = title.replace(/のサムネイル$/, '').trim();
+            return {
+              url:      el.href,
+              title,
+              image:    el.querySelector('img')?.src || '',
+              priceRaw: el.querySelector('[class*="price"], [class*="Price"]')?.textContent || '',
+            };
+          })
         ).catch(() => []);
         console.log(`🔍 パターン3 [a[href*="/item/m"]]: ${links.length}件`);
         if (links.length) {
@@ -171,7 +175,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
             price:      parseInt((l.priceRaw.replace(/[^0-9]/g, '') || '0'), 10),
             url:        l.url,
             image_url:  l.image,
-            listed_at:  new Date().toISOString(),
+            listed_at:  null,
           }));
         }
       }
@@ -193,11 +197,22 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
             const imgs      = el.querySelector('img');
             const priceEl   = el.querySelector('[class*="price"], [class*="Price"], mer-price');
             const priceText = priceEl?.textContent || '';
+
+            // タイトル取得: img.alt → name/title要素 → テキスト
+            let title = imgs?.alt || el.querySelector('[class*="name"],[class*="title"]')?.textContent?.trim() || '';
+            // メルカリのalt属性は「〇〇のサムネイル」形式なのでサフィックスを除去
+            title = title.replace(/のサムネイル$/, '').trim();
+
+            // 出品時間テキスト取得（例: "1時間前", "3日前"）
+            const timeEl = el.querySelector('[class*="created"], [class*="time"], [class*="updated"]');
+            const timeText = timeEl?.textContent?.trim() || '';
+
             return {
               url,
-              title:    imgs?.alt || el.querySelector('[class*="name"],[class*="title"]')?.textContent?.trim() || '',
+              title,
               price:    priceText.replace(/[^0-9]/g, ''),
               image:    imgs?.src || '',
+              timeText,
             };
           }).catch(() => null);
 
@@ -210,7 +225,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
             price:      parseInt(data.price || '0', 10),
             url:        data.url,
             image_url:  data.image,
-            listed_at:  new Date().toISOString(),
+            listed_at:  this._parseRelativeTime(data.timeText),
           });
         } catch (e) {
           console.warn(`商品抽出エラー: ${e.message}`);
@@ -226,6 +241,33 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
     } finally {
       if (page) await page.close().catch(() => {});
     }
+  }
+
+  /**
+   * 相対時間テキスト（例: "3分前", "2時間前", "1日前"）をISO文字列に変換
+   * パースできない場合は null を返す
+   */
+  _parseRelativeTime(text) {
+    if (!text) return null;
+    const now = Date.now();
+
+    const m = text.match(/(\d+)\s*(秒|分|時間|日|ヶ月|か月)/);
+    if (!m) return null;
+
+    const num  = parseInt(m[1], 10);
+    const unit = m[2];
+    const msMap = {
+      '秒':    1000,
+      '分':    60 * 1000,
+      '時間':  60 * 60 * 1000,
+      '日':    24 * 60 * 60 * 1000,
+      'ヶ月':  30 * 24 * 60 * 60 * 1000,
+      'か月':  30 * 24 * 60 * 60 * 1000,
+    };
+    const ms = msMap[unit];
+    if (!ms) return null;
+
+    return new Date(now - num * ms).toISOString();
   }
 
   async getProductDetail(url) {
