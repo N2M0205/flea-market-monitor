@@ -116,47 +116,53 @@ class LineNotificationService {
     }
   }
 
-  // ② 新規: 通知テキスト組み立て
+  // ② 通知テキスト組み立て
   buildPurchaseAlertText(params) {
-    const { product, master, expiryMonths, hoursOld, stockDisplay, rarity } = params;
+    const { product, master, crossmallInfo, hoursOld } = params;
 
     const price         = Number(product?.price) || 0;
-    const purchaseLimit = master?.purchaseLimit   != null ? `¥${Math.round(Number(master.purchaseLimit)).toLocaleString()}` : '─';
-    const stockText     = stockDisplay            != null ? `${stockDisplay}個` : '─';
+    const purchaseLimit = master?.purchaseLimit != null ? Number(master.purchaseLimit) : null;
+    const stock         = crossmallInfo?.stock  != null ? crossmallInfo.stock : (master?.stock ?? null);
+    const sales28       = crossmallInfo?.sales28 != null ? crossmallInfo.sales28 : (master?.sales28 ?? null);
+    const lastSalePrice = crossmallInfo?.price  != null ? Number(crossmallInfo.price) : null;
 
-    // 賞味期限テキスト
-    let expiryText = '❓期限不明';
-    if (expiryMonths !== null) {
-      const now = new Date();
-      const expYear  = now.getFullYear() + Math.floor((now.getMonth() + expiryMonths) / 12);
-      const expMonth = ((now.getMonth() + expiryMonths) % 12) + 1;
-      expiryText = `${expYear}年${expMonth}月（残${expiryMonths}ヶ月）✅`;
-    }
+    // プラットフォーム名
+    const platform = product?.platform || product?.source || '─';
 
     // 出品経過時間テキスト
-    let timeText;
-    if (hoursOld < 1) {
-      timeText = `${Math.round(hoursOld * 60)}分前 🔥`;
-    } else if (hoursOld < 24) {
-      timeText = `${Math.floor(hoursOld)}時間前`;
-    } else {
-      timeText = `${Math.floor(hoursOld / 24)}日前`;
+    let timeText = '─';
+    if (hoursOld != null) {
+      if (hoursOld < 1) {
+        timeText = `${Math.round(hoursOld * 60)}分前`;
+      } else if (hoursOld < 24) {
+        timeText = `${Math.floor(hoursOld)}時間前`;
+      } else {
+        timeText = `${Math.floor(hoursOld / 24)}日前`;
+      }
     }
 
-    // 希少度テキスト
-    const rarityText = rarity ? `${rarity.emoji} ${rarity.label}` : '─';
+    // 利益見込み計算
+    let profitLine = '';
+    if (lastSalePrice != null && price > 0) {
+      const profit = lastSalePrice - price;
+      const emoji = profit >= 0 ? '✅' : '⚠️';
+      const sign = profit >= 0 ? '+' : '';
+      profitLine = `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}`;
+    }
 
     const lines = [
-      '🛒 仕入れ推奨アラート',
-      `【商品名】${product?.title || '─'}`,
-      `【価格】¥${price.toLocaleString()}（送料無料）`,
-      `【上限仕入価格】${purchaseLimit}`,
-      `【在庫数】${stockText}`,
-      `【賞味期限】${expiryText}`,
-      `【出品】${timeText}`,
-      `【希少度】${rarityText}`,
+      `🛒 ${product?.title || '─'}`,
+      `¥${price.toLocaleString()}`,
+      `📍 ${platform} | ${timeText}`,
       `🔗 ${product?.url || '─'}`,
+      '',
+      `📦 在庫${stock != null ? stock : '─'}個 | 28日販売${sales28 != null ? sales28 : '─'}個`,
+      `💰 直近販売¥${lastSalePrice != null ? lastSalePrice.toLocaleString() : '─'} | 上限仕入¥${purchaseLimit != null ? Math.round(purchaseLimit).toLocaleString() : '─'}`,
     ];
+
+    if (profitLine) {
+      lines.push(profitLine);
+    }
 
     return lines.join('\n');
   }
@@ -217,25 +223,33 @@ class LineNotificationService {
     const displayProducts = products.slice(0, maxDisplay);
     const remainingCount  = products.length - maxDisplay;
 
-    let msg = `🆕 新商品が見つかりました！\n`;
-    msg += `キーワード: "${keyword?.keyword || '（不明）'}"\n`;
+    const stock         = crossmallInfo?.stock  ?? null;
+    const sales28       = crossmallInfo?.sales28 ?? null;
+    const lastSalePrice = crossmallInfo?.price != null ? Number(crossmallInfo.price) : null;
+
+    let msg = `🆕 "${keyword?.keyword || '（不明）'}" の新着\n`;
     msg += `━━━━━━━━━━━━━━━━\n\n`;
 
-    if (crossmallInfo) {
-      msg += `📊 在庫情報（CROSSMALL）\n`;
-      msg += `├ 商品コード: ${crossmallInfo.item_code}\n`;
-      msg += `├ 残在庫数: ${crossmallInfo.stock}個\n`;
-      msg += crossmallInfo.price
-        ? `└ 最後に売れた金額: ¥${Number(crossmallInfo.price).toLocaleString()}\n`
-        : `└ 最後に売れた金額: 販売実績なし\n`;
-      msg += `\n━━━━━━━━━━━━━━━━\n\n`;
-    }
-
     displayProducts.forEach((p, i) => {
-      msg += `📦 商品 ${i + 1}\n`;
-      msg += `タイトル: ${p.title}\n`;
-      msg += `価格: ¥${Number(p.price || 0).toLocaleString()}\n`;
+      const price    = Number(p.price || 0);
+      const platform = p.platform || p.source || '─';
+
+      msg += `🛒 ${p.title}\n`;
+      msg += `¥${price.toLocaleString()}\n`;
+      msg += `📍 ${platform}\n`;
       msg += `🔗 ${p.url}\n`;
+
+      if (crossmallInfo) {
+        msg += `📦 在庫${stock != null ? stock : '─'}個 | 28日販売${sales28 != null ? sales28 : '─'}個\n`;
+        msg += `💰 直近販売¥${lastSalePrice != null ? lastSalePrice.toLocaleString() : '─'}\n`;
+        if (lastSalePrice != null && price > 0) {
+          const profit = lastSalePrice - price;
+          const emoji = profit >= 0 ? '✅' : '⚠️';
+          const sign = profit >= 0 ? '+' : '';
+          msg += `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}\n`;
+        }
+      }
+
       if (i < displayProducts.length - 1) msg += `\n―――――――――――――――\n\n`;
     });
 

@@ -209,11 +209,12 @@ class CrossmallService {
   }
 
   /**
-   * 最後に売れた金額を取得
+   * 最後に売れた金額と28日間の販売個数を取得
+   * @returns {{ lastPrice: number|null, salesCount: number }}
    */
-  async getLastSalePrice(itemCode, days = 28) {
+  async getLastSalePriceAndCount(itemCode, days = 28) {
     try {
-      console.log(`🔍 CROSSMALL販売価格取得開始: ${itemCode} (過去${days}日間)`);
+      console.log(`🔍 CROSSMALL販売価格・個数取得開始: ${itemCode} (過去${days}日間)`);
 
       const cleanedItemCode = this.cleanItemCode(itemCode);
 
@@ -222,34 +223,46 @@ class CrossmallService {
 
       if (orderNumbers.length === 0) {
         console.log('⚠️ 該当期間に注文なし');
-        return null;
+        return { lastPrice: null, salesCount: 0 };
       }
 
-      // 2. 最新の注文から順に検索
+      let lastPrice = null;
+      let salesCount = 0;
+
+      // 2. 全注文を走査して販売個数をカウント＆直近価格を取得
       for (let i = orderNumbers.length - 1; i >= 0; i--) {
         const orderNumber = orderNumbers[i];
-        
+
         // 50ms待機（API負荷軽減）
         await new Promise(resolve => setTimeout(resolve, 50));
 
         const details = await this.getOrderDetail(orderNumber);
 
         // 該当商品を検索
-        const matchedItem = details.find(d => 
+        const matched = details.filter(d =>
           d.item_code === cleanedItemCode || d.item_code === itemCode
         );
 
-        if (matchedItem && matchedItem.unit_price > 0) {
-          console.log(`✅ CROSSMALL販売価格取得成功: ${itemCode} - ¥${matchedItem.unit_price} (注文番号: ${orderNumber})`);
-          return matchedItem.unit_price;
+        for (const item of matched) {
+          if (item.unit_price > 0) {
+            salesCount++;
+            if (lastPrice === null) {
+              lastPrice = item.unit_price;
+            }
+          }
         }
       }
 
-      console.log(`⚠️ CROSSMALL販売実績なし: ${itemCode}`);
-      return null;
+      if (lastPrice !== null) {
+        console.log(`✅ CROSSMALL販売情報取得成功: ${itemCode} - ¥${lastPrice}, ${salesCount}個販売`);
+      } else {
+        console.log(`⚠️ CROSSMALL販売実績なし: ${itemCode}`);
+      }
+
+      return { lastPrice, salesCount };
     } catch (error) {
       console.error(`❌ CROSSMALL販売価格取得エラー: ${itemCode}`, error.message);
-      return null;
+      return { lastPrice: null, salesCount: 0 };
     }
   }
 
@@ -263,10 +276,10 @@ class CrossmallService {
       // 在庫情報を取得
       const stockInfo = await this.getStockInfo(itemCode);
 
-      // 販売価格を取得
-      const salePrice = await this.getLastSalePrice(itemCode, days);
+      // 販売価格・販売個数を取得
+      const { lastPrice, salesCount } = await this.getLastSalePriceAndCount(itemCode, days);
 
-      if (!stockInfo && !salePrice) {
+      if (!stockInfo && lastPrice === null) {
         console.log(`⚠️ CROSSMALL情報なし: ${itemCode}`);
         return null;
       }
@@ -274,11 +287,12 @@ class CrossmallService {
       const result = {
         item_code: itemCode,
         stock: stockInfo?.stock || 0,
-        price: salePrice,
+        price: lastPrice,
+        sales28: salesCount,
         item_name: stockInfo?.item_name || null
       };
 
-      console.log(`✅ CROSSMALL取得完了: ${itemCode} - 在庫: ${result.stock}, 販売価格: ¥${result.price || 'N/A'}`);
+      console.log(`✅ CROSSMALL取得完了: ${itemCode} - 在庫: ${result.stock}, 販売価格: ¥${result.price || 'N/A'}, 28日販売: ${result.sales28}個`);
 
       return result;
     } catch (error) {
