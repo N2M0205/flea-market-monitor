@@ -129,21 +129,6 @@ class LineNotificationService {
       : (master?.sales28 ?? crossmallInfo?.sales28 ?? null);
     const lastSalePrice = crossmallInfo?.price  != null ? Number(crossmallInfo.price) : null;
 
-    // プラットフォーム名
-    const platform = product?.platform || product?.source || '─';
-
-    // 出品経過時間テキスト
-    let timeText = '─';
-    if (hoursOld != null) {
-      if (hoursOld < 1) {
-        timeText = `${Math.round(hoursOld * 60)}分前`;
-      } else if (hoursOld < 24) {
-        timeText = `${Math.floor(hoursOld)}時間前`;
-      } else {
-        timeText = `${Math.floor(hoursOld / 24)}日前`;
-      }
-    }
-
     // 利益見込み計算
     let profitLine = '';
     if (lastSalePrice != null && price > 0) {
@@ -156,7 +141,6 @@ class LineNotificationService {
     const lines = [
       `🛒 ${product?.title || '─'}`,
       `¥${price.toLocaleString()}`,
-      `📍 ${platform} | ${timeText}`,
       `🔗 ${product?.url || '─'}`,
       '',
       `📦 在庫${stock != null ? stock : '─'}個 | 28日販売${sales28 != null ? sales28 : '─'}個`,
