@@ -127,7 +127,9 @@ class LineNotificationService {
     const sales28       = (crossmallInfo?.sales28 != null && crossmallInfo.sales28 > 0)
       ? crossmallInfo.sales28
       : (master?.sales28 ?? crossmallInfo?.sales28 ?? null);
-    const lastSalePrice = crossmallInfo?.price  != null ? Number(crossmallInfo.price) : null;
+    const lastSalePrice = crossmallInfo?.price  != null ? Number(crossmallInfo.price)
+                        : master?.lastSalePrice != null ? Number(master.lastSalePrice)
+                        : null;
 
     // 利益見込み計算
     let profitLine = '';
@@ -210,9 +212,14 @@ class LineNotificationService {
     const displayProducts = products.slice(0, maxDisplay);
     const remainingCount  = products.length - maxDisplay;
 
+    const purchaseMasterCache = require('./PurchaseMasterCache');
+    const master = keyword?.crossmall_item_code ? purchaseMasterCache.getMasterItem(keyword.crossmall_item_code) : null;
+
     const stock         = crossmallInfo?.stock  ?? null;
     const sales28       = crossmallInfo?.sales28 ?? null;
-    const lastSalePrice = crossmallInfo?.price != null ? Number(crossmallInfo.price) : null;
+    const lastSalePrice = crossmallInfo?.price != null ? Number(crossmallInfo.price)
+                        : master?.lastSalePrice != null ? Number(master.lastSalePrice)
+                        : null;
 
     let msg = `🆕 "${keyword?.keyword || '（不明）'}" の新着\n`;
     msg += `━━━━━━━━━━━━━━━━\n\n`;
@@ -226,8 +233,10 @@ class LineNotificationService {
       msg += `📍 ${platform}\n`;
       msg += `🔗 ${p.url}\n`;
 
-      if (crossmallInfo) {
-        msg += `📦 在庫${stock != null ? stock : '─'}個 | 28日販売${sales28 != null ? sales28 : '─'}個\n`;
+      if (crossmallInfo || master) {
+        const dispStock = stock ?? master?.stock ?? null;
+        const dispSales = sales28 ?? master?.sales28 ?? null;
+        msg += `📦 在庫${dispStock != null ? dispStock : '─'}個 | 28日販売${dispSales != null ? dispSales : '─'}個\n`;
         msg += `💰 直近販売¥${lastSalePrice != null ? lastSalePrice.toLocaleString() : '─'}\n`;
         if (lastSalePrice != null && price > 0) {
           const profit = lastSalePrice - price;
