@@ -9,6 +9,30 @@
 
 const CrossmallService = require('./CrossmallService');
 
+// 送料辞書（CROSSMALL delivery_type_name → 送料）
+const SHIPPING_COST_MAP = {
+  '宅配便(日本郵便 楽天倉庫出荷)': 620,
+  '追跡可能メール便(日本郵便)': 220,
+  'メール便(日本郵便)': 340,
+  '宅配便(佐川急便)': 550,
+};
+const DEFAULT_SHIPPING_COST = 620;
+
+/**
+ * 配送種別から送料を取得
+ */
+function getShippingCost(deliveryType) {
+  if (!deliveryType) return DEFAULT_SHIPPING_COST;
+  return SHIPPING_COST_MAP[deliveryType] ?? DEFAULT_SHIPPING_COST;
+}
+
+/**
+ * 利益計算: 直近販売価格 × 0.9 − 送料 − フリマ出品価格
+ */
+function calcProfit(lastSalePrice, shippingCost, fleaMarketPrice) {
+  return Math.round(lastSalePrice * 0.9 - shippingCost - fleaMarketPrice);
+}
+
 class LineNotificationService {
   constructor() {
     this.config = {
@@ -131,13 +155,16 @@ class LineNotificationService {
                         : master?.lastSalePrice != null ? Number(master.lastSalePrice)
                         : null;
 
-    // 利益見込み計算
+    // 送料・利益見込み計算
+    const deliveryType = crossmallInfo?.deliveryType || master?.deliveryType || '';
+    const shippingCost = getShippingCost(deliveryType);
+
     let profitLine = '';
     if (lastSalePrice != null && price > 0) {
-      const profit = lastSalePrice - price;
+      const profit = calcProfit(lastSalePrice, shippingCost, price);
       const emoji = profit >= 0 ? '✅' : '⚠️';
       const sign = profit >= 0 ? '+' : '';
-      profitLine = `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}`;
+      profitLine = `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}（手数料10%+送料¥${shippingCost}）`;
     }
 
     const lines = [
@@ -221,6 +248,9 @@ class LineNotificationService {
                         : master?.lastSalePrice != null ? Number(master.lastSalePrice)
                         : null;
 
+    const deliveryType = crossmallInfo?.deliveryType || master?.deliveryType || '';
+    const shippingCost = getShippingCost(deliveryType);
+
     let msg = `🆕 "${keyword?.keyword || '（不明）'}" の新着\n`;
     msg += `━━━━━━━━━━━━━━━━\n\n`;
 
@@ -239,10 +269,10 @@ class LineNotificationService {
         msg += `📦 在庫${dispStock != null ? dispStock : '─'}個 | 28日販売${dispSales != null ? dispSales : '─'}個\n`;
         msg += `💰 直近販売¥${lastSalePrice != null ? lastSalePrice.toLocaleString() : '─'}\n`;
         if (lastSalePrice != null && price > 0) {
-          const profit = lastSalePrice - price;
+          const profit = calcProfit(lastSalePrice, shippingCost, price);
           const emoji = profit >= 0 ? '✅' : '⚠️';
           const sign = profit >= 0 ? '+' : '';
-          msg += `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}\n`;
+          msg += `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}（手数料10%+送料¥${shippingCost}）\n`;
         }
       }
 

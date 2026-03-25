@@ -145,26 +145,39 @@ class CrossmallService {
   }
 
   /**
-   * 指定期間の注文番号を1回のAPIコールで取得（最大100件）
+   * 指定期間の注文を1回のAPIコールで取得（最大100件）
+   * @returns {{ orderNumbers: string[], orderMeta: Map<string, { deliveryType: string }> }}
    */
-  async _fetchOrderNumbersForRange(fromDate, toDate) {
+  async _fetchOrdersForRange(fromDate, toDate) {
     const result = await this.makeRequest('get_order', {
       order_date_fr: this._formatDate(fromDate),
       order_date_to: this._formatDate(toDate)
     });
 
-    if (!result) return [];
+    if (!result) return { orderNumbers: [], orderMeta: new Map() };
 
     const resultSet = result.GetOrder?.ResultSet;
-    if (!resultSet || !resultSet.Result) return [];
+    if (!resultSet || !resultSet.Result) return { orderNumbers: [], orderMeta: new Map() };
 
     const results = Array.isArray(resultSet.Result) ? resultSet.Result : [resultSet.Result];
-    return results.map(r => r.order_number).filter(n => n);
+    const orderNumbers = [];
+    const orderMeta = new Map();
+
+    for (const r of results) {
+      if (!r.order_number) continue;
+      orderNumbers.push(r.order_number);
+      orderMeta.set(r.order_number, {
+        deliveryType: r.delivery_type_name || ''
+      });
+    }
+
+    return { orderNumbers, orderMeta };
   }
 
   /**
-   * 過去N日間の注文番号リストを取得
+   * 過去N日間の注文番号リスト＋メタ情報を取得
    * API上限100件/リクエストのため、7日間ごとに分割して取得
+   * @returns {{ orderNumbers: string[], orderMetaMap: Map<string, { deliveryType: string }> }}
    */
   async getOrderNumbers(days = 28) {
     try {
@@ -174,6 +187,7 @@ class CrossmallService {
 
       const CHUNK_DAYS = 7;
       const orderSet = new Set();
+      const orderMetaMap = new Map();
 
       console.log(`🔍 注文番号取得: ${this._formatDate(globalStart)} ~ ${this._formatDate(now)} (${CHUNK_DAYS}日分割)`);
 
@@ -186,8 +200,9 @@ class CrossmallService {
         chunkEnd.setDate(chunkEnd.getDate() + CHUNK_DAYS - 1);
         if (chunkEnd > now) chunkEnd.setTime(now.getTime());
 
-        const numbers = await this._fetchOrderNumbersForRange(chunkStart, chunkEnd);
+        const { orderNumbers: numbers, orderMeta } = await this._fetchOrdersForRange(chunkStart, chunkEnd);
         for (const n of numbers) orderSet.add(n);
+        for (const [k, v] of orderMeta) orderMetaMap.set(k, v);
 
         chunkIndex++;
         console.log(`  [${chunkIndex}] ${this._formatDate(chunkStart)}~${this._formatDate(chunkEnd)}: ${numbers.length}件 (累計: ${orderSet.size})`);
@@ -198,10 +213,10 @@ class CrossmallService {
 
       const orderNumbers = [...orderSet].sort();
       console.log(`✅ ${orderNumbers.length}件の注文を取得 (${chunkIndex}回のAPIコール)`);
-      return orderNumbers;
+      return { orderNumbers, orderMetaMap };
     } catch (error) {
       console.error('❌ 注文番号取得エラー:', error.message);
-      return [];
+      return { orderNumbers: [], orderMetaMap: new Map() };
     }
   }
 
@@ -243,7 +258,7 @@ class CrossmallService {
       const cleanedItemCode = this.cleanItemCode(itemCode);
 
       // 1. 注文番号リストを取得
-      const orderNumbers = await this.getOrderNumbers(days);
+      const { orderNumbers } = await this.getOrderNumbers(days);
 
       if (orderNumbers.length === 0) {
         console.log('⚠️ 該当期間に注文なし');
@@ -325,14 +340,14 @@ class CrossmallService {
     }
   }
   /**
-   * 全注文から全SKUの最新販売価格をまとめて取得
+   * 全注文から全SKUの最新販売価格＋配送種別をまとめて取得
    * @param {number} days - 過去何日間を対象にするか
-   * @returns {Map<string, { price: number, orderNumber: string }>} cleanedItemCode → 最新価格
+   * @returns {Map<string, { price: number, orderNumber: string, deliveryType: string }>}
    */
   async getAllLastSalePrices(days = 90) {
     console.log(`🔍 CROSSMALL 全SKU販売価格一括取得開始 (過去${days}日間)`);
 
-    const orderNumbers = await this.getOrderNumbers(days);
+    const { orderNumbers, orderMetaMap } = await this.getOrderNumbers(days);
     if (orderNumbers.length === 0) {
       console.log('⚠️ 該当期間に注文なし');
       return new Map();
@@ -345,11 +360,14 @@ class CrossmallService {
 
     for (const orderNumber of orderNumbers) {
       const details = await this.getOrderDetail(orderNumber);
+      const meta = orderMetaMap.get(orderNumber);
+
       for (const d of details) {
         if (d.item_code && d.unit_price > 0) {
           priceMap.set(d.item_code, {
             price: d.unit_price,
-            orderNumber: d.order_number
+            orderNumber: d.order_number,
+            deliveryType: meta?.deliveryType || ''
           });
         }
       }

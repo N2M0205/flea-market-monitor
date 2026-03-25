@@ -85,8 +85,8 @@ class PurchaseMasterCache {
   }
 
   /**
-   * CROSSMALL注文データからlastSalePriceを一括更新
-   * @param {Map<string, { price: number, orderNumber: string }>} priceMap - cleanedItemCode → 価格情報
+   * CROSSMALL注文データからlastSalePrice・deliveryTypeを一括更新
+   * @param {Map<string, { price: number, orderNumber: string, deliveryType: string }>} priceMap
    * @returns {{ updated: number, notFound: number }} 更新結果
    */
   updateLastSalePrices(priceMap) {
@@ -97,6 +97,7 @@ class PurchaseMasterCache {
       const item = this._cache.itemMap[itemCode];
       if (item) {
         item.lastSalePrice = info.price;
+        if (info.deliveryType) item.deliveryType = info.deliveryType;
         updated++;
       } else {
         notFound++;
@@ -109,6 +110,7 @@ class PurchaseMasterCache {
       const priceInfo = priceMap.get(code);
       if (priceInfo) {
         item.lastSalePrice = priceInfo.price;
+        if (priceInfo.deliveryType) item.deliveryType = priceInfo.deliveryType;
       }
     }
 
