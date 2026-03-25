@@ -162,9 +162,10 @@ class LineNotificationService {
     let profitLine = '';
     if (lastSalePrice != null && price > 0) {
       const profit = calcProfit(lastSalePrice, shippingCost, price);
+      const profitRate = ((profit / lastSalePrice) * 100).toFixed(1);
       const emoji = profit >= 0 ? '✅' : '⚠️';
       const sign = profit >= 0 ? '+' : '';
-      profitLine = `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}（手数料10%+送料¥${shippingCost}）`;
+      profitLine = `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}（送料¥${shippingCost}）利益率${profitRate}%`;
     }
 
     const lines = [
@@ -270,9 +271,10 @@ class LineNotificationService {
         msg += `💰 直近販売¥${lastSalePrice != null ? lastSalePrice.toLocaleString() : '─'}\n`;
         if (lastSalePrice != null && price > 0) {
           const profit = calcProfit(lastSalePrice, shippingCost, price);
+          const profitRate = ((profit / lastSalePrice) * 100).toFixed(1);
           const emoji = profit >= 0 ? '✅' : '⚠️';
           const sign = profit >= 0 ? '+' : '';
-          msg += `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}（手数料10%+送料¥${shippingCost}）\n`;
+          msg += `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}（送料¥${shippingCost}）利益率${profitRate}%\n`;
         }
       }
 
