@@ -170,7 +170,7 @@ class CrossmallService {
 
       const results = Array.isArray(resultSet.Result) ? resultSet.Result : [resultSet.Result];
       const orderNumbers = results
-        .map(r => r.OrderNumber)
+        .map(r => r.order_number)
         .filter(n => n);
 
       console.log(`✅ ${orderNumbers.length}件の注文を取得`);
@@ -198,8 +198,8 @@ class CrossmallService {
       const results = Array.isArray(resultSet.Result) ? resultSet.Result : [resultSet.Result];
       
       return results.map(r => ({
-        item_code: this.cleanItemCode(r.ItemCode || ''),
-        unit_price: parseFloat(r.UnitPrice || 0),
+        item_code: this.cleanItemCode(r.item_code || r.ItemCode || ''),
+        unit_price: parseFloat(r.unit_price || r.UnitPrice || 0),
         order_number: orderNumber
       }));
     } catch (error) {
@@ -285,6 +285,45 @@ class CrossmallService {
       console.error(`❌ CROSSMALL取得エラー: ${itemCode}`, error.message);
       return null;
     }
+  }
+  /**
+   * 全注文から全SKUの最新販売価格をまとめて取得
+   * @param {number} days - 過去何日間を対象にするか
+   * @returns {Map<string, { price: number, orderNumber: string }>} cleanedItemCode → 最新価格
+   */
+  async getAllLastSalePrices(days = 90) {
+    console.log(`🔍 CROSSMALL 全SKU販売価格一括取得開始 (過去${days}日間)`);
+
+    const orderNumbers = await this.getOrderNumbers(days);
+    if (orderNumbers.length === 0) {
+      console.log('⚠️ 該当期間に注文なし');
+      return new Map();
+    }
+
+    // 全注文の詳細を取得して、SKUごとに最新価格を記録
+    // orderNumbersは昇順（古い順）なので、後のものが新しい
+    const priceMap = new Map();
+    let processed = 0;
+
+    for (const orderNumber of orderNumbers) {
+      const details = await this.getOrderDetail(orderNumber);
+      for (const d of details) {
+        if (d.item_code && d.unit_price > 0) {
+          priceMap.set(d.item_code, {
+            price: d.unit_price,
+            orderNumber: d.order_number
+          });
+        }
+      }
+      processed++;
+      if (processed % 50 === 0) {
+        console.log(`  ${processed}/${orderNumbers.length} 注文処理済み`);
+      }
+      await new Promise(r => setTimeout(r, 30));
+    }
+
+    console.log(`✅ 全SKU販売価格取得完了: ${priceMap.size}種類のSKU`);
+    return priceMap;
   }
 }
 

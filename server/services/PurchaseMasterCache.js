@@ -1,6 +1,6 @@
 // server/services/PurchaseMasterCache.js
 // GASから送信される仕入れマスタデータをキャッシュするシングルトン
-// - itemMap: { [crossmall_item_code]: { purchaseLimit, stock, sales28 } }
+// - itemMap: { [crossmall_item_code]: { purchaseLimit, stock, sales28, lastSalePrice } }
 // - data/purchase_master_cache.json にディスク永続化（VPS再起動対応）
 
 const fs = require('fs');
@@ -44,6 +44,7 @@ class PurchaseMasterCache {
       syncedAt: this._cache.syncedAt,
       totalItems: this._cache.totalItems,
       isCached: this._cache.totalItems > 0,
+      lastSalePriceSyncedAt: this._cache.lastSalePriceSyncedAt || null,
     };
   }
 
@@ -81,6 +82,41 @@ class PurchaseMasterCache {
     this._saveToDisk();
 
     console.log(`✅ PurchaseMasterCache 更新完了: ${Object.keys(itemMap).length}件, syncedAt=${this._cache.syncedAt}`);
+  }
+
+  /**
+   * CROSSMALL注文データからlastSalePriceを一括更新
+   * @param {Map<string, { price: number, orderNumber: string }>} priceMap - cleanedItemCode → 価格情報
+   * @returns {{ updated: number, notFound: number }} 更新結果
+   */
+  updateLastSalePrices(priceMap) {
+    let updated = 0;
+    let notFound = 0;
+
+    for (const [itemCode, info] of priceMap) {
+      const item = this._cache.itemMap[itemCode];
+      if (item) {
+        item.lastSalePrice = info.price;
+        updated++;
+      } else {
+        notFound++;
+      }
+    }
+
+    // items配列にも反映（ディスク保存用）
+    for (const item of this._cache.items) {
+      const code = String(item.sku || item.crossmall_item_code || '').trim();
+      const priceInfo = priceMap.get(code);
+      if (priceInfo) {
+        item.lastSalePrice = priceInfo.price;
+      }
+    }
+
+    this._cache.lastSalePriceSyncedAt = new Date().toISOString();
+    this._saveToDisk();
+
+    console.log(`✅ lastSalePrice更新完了: ${updated}件更新, ${notFound}件マスタ未登録`);
+    return { updated, notFound };
   }
 
   // ─────────────────────────────────────────────

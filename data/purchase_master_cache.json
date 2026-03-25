@@ -6,7 +6,8 @@
       "sku": "2314-000546",
       "purchaseLimit": 953.1336956521739,
       "stock": 53,
-      "sales28": 92
+      "sales28": 92,
+      "lastSalePrice": 1700
     },
     {
       "sku": "2314-001333",
@@ -24,13 +25,15 @@
       "sku": "2314-001452",
       "purchaseLimit": 1422.0641666666666,
       "stock": 286,
-      "sales28": 120
+      "sales28": 120,
+      "lastSalePrice": 2100
     },
     {
       "sku": "2314-001515",
       "purchaseLimit": 5638.185714285713,
       "stock": 29,
-      "sales28": 14
+      "sales28": 14,
+      "lastSalePrice": 5850
     },
     {
       "sku": "2314-001395",
@@ -48,13 +51,15 @@
       "sku": "2314-001067",
       "purchaseLimit": 3696.536,
       "stock": 23,
-      "sales28": 35
+      "sales28": 35,
+      "lastSalePrice": 4150
     },
     {
       "sku": "2314-001077",
       "purchaseLimit": 14401.942000000003,
       "stock": 73,
-      "sales28": 20
+      "sales28": 20,
+      "lastSalePrice": 17640
     },
     {
       "sku": "2314-001164",
@@ -90,7 +95,8 @@
       "sku": "2314-000192",
       "purchaseLimit": 4651.3294117647065,
       "stock": 2,
-      "sales28": 17
+      "sales28": 17,
+      "lastSalePrice": 4800
     },
     {
       "sku": "2314-001057",
@@ -108,7 +114,8 @@
       "sku": "2314-001541",
       "purchaseLimit": 4209.1,
       "stock": 18,
-      "sales28": 6
+      "sales28": 6,
+      "lastSalePrice": 5780
     },
     {
       "sku": "2314-001292",
@@ -126,13 +133,15 @@
       "sku": "2314-001786",
       "purchaseLimit": 9884.105882352942,
       "stock": 28,
-      "sales28": 17
+      "sales28": 17,
+      "lastSalePrice": 11860
     },
     {
       "sku": "2314-001072",
       "purchaseLimit": 4758.49,
       "stock": 0,
-      "sales28": 40
+      "sales28": 40,
+      "lastSalePrice": 6340
     },
     {
       "sku": "2314-001392",
@@ -192,7 +201,8 @@
       "sku": "2314-001844",
       "purchaseLimit": 4522.4,
       "stock": 20,
-      "sales28": 13
+      "sales28": 13,
+      "lastSalePrice": 5850
     },
     {
       "sku": "2314-001039",
@@ -204,13 +214,15 @@
       "sku": "2314-0001070",
       "purchaseLimit": 4023.1517241379306,
       "stock": 3,
-      "sales28": 29
+      "sales28": 29,
+      "lastSalePrice": 5890
     },
     {
       "sku": "2314-001265",
       "purchaseLimit": 2848.6400000000003,
       "stock": 7,
-      "sales28": 13
+      "sales28": 13,
+      "lastSalePrice": 3820
     },
     {
       "sku": "2314-001457",
@@ -240,7 +252,8 @@
       "sku": "2314-000854",
       "purchaseLimit": 4094.1090909090913,
       "stock": 43,
-      "sales28": 11
+      "sales28": 11,
+      "lastSalePrice": 5670
     },
     {
       "sku": "2314-000699",
@@ -264,7 +277,8 @@
       "sku": "2314-001270",
       "purchaseLimit": 7624.2625,
       "stock": 18,
-      "sales28": 32
+      "sales28": 32,
+      "lastSalePrice": 8800
     },
     {
       "sku": "2314-001632",
@@ -288,13 +302,15 @@
       "sku": "2314-001180",
       "purchaseLimit": 2785.8363636363633,
       "stock": 27,
-      "sales28": 11
+      "sales28": 11,
+      "lastSalePrice": 3600
     },
     {
       "sku": "2314-000752",
       "purchaseLimit": 3684.0950000000003,
       "stock": 19,
-      "sales28": 4
+      "sales28": 4,
+      "lastSalePrice": 4929
     },
     {
       "sku": "2314-001097",
@@ -330,7 +346,8 @@
       "sku": "2314-001462",
       "purchaseLimit": 3370.184,
       "stock": 5,
-      "sales28": 20
+      "sales28": 20,
+      "lastSalePrice": 3100
     },
     {
       "sku": "2314-001052",
@@ -372,7 +389,8 @@
       "sku": "2314-001247",
       "purchaseLimit": 5937.894736842105,
       "stock": 20,
-      "sales28": 38
+      "sales28": 38,
+      "lastSalePrice": 7180
     },
     {
       "sku": "2314-001852",
@@ -396,7 +414,8 @@
       "sku": "2314-001820",
       "purchaseLimit": 3825.0799999999995,
       "stock": 40,
-      "sales28": 10
+      "sales28": 10,
+      "lastSalePrice": 5550
     },
     {
       "sku": "2314-001646",
@@ -462,7 +481,8 @@
       "sku": "2314-000559",
       "purchaseLimit": 2785.6,
       "stock": 7,
-      "sales28": 3
+      "sales28": 3,
+      "lastSalePrice": 3545
     },
     {
       "sku": "2314-001818",
@@ -528,7 +548,8 @@
       "sku": "2314-000724",
       "purchaseLimit": 3347.7714285714283,
       "stock": 22,
-      "sales28": 7
+      "sales28": 7,
+      "lastSalePrice": 5400
     },
     {
       "sku": "2314-000835",
@@ -558,7 +579,8 @@
       "sku": "2314-001842",
       "purchaseLimit": 4917.826086956521,
       "stock": 18,
-      "sales28": 23
+      "sales28": 23,
+      "lastSalePrice": 6450
     },
     {
       "sku": "2314-001830",
@@ -570,7 +592,8 @@
       "sku": "2314-001636",
       "purchaseLimit": 6026,
       "stock": 32,
-      "sales28": 26
+      "sales28": 26,
+      "lastSalePrice": 7500
     },
     {
       "sku": "2314-0001081",
@@ -582,7 +605,8 @@
       "sku": "2314-001441",
       "purchaseLimit": 3271.475,
       "stock": 6,
-      "sales28": 4
+      "sales28": 4,
+      "lastSalePrice": 4475
     },
     {
       "sku": "2314-001645",
@@ -624,7 +648,8 @@
       "sku": "2314-001347",
       "purchaseLimit": 5284.4,
       "stock": 6,
-      "sales28": 1
+      "sales28": 1,
+      "lastSalePrice": 4400
     },
     {
       "sku": "2314-001815",
@@ -636,13 +661,15 @@
       "sku": "2314-001398",
       "purchaseLimit": 5035,
       "stock": 47,
-      "sales28": 2
+      "sales28": 2,
+      "lastSalePrice": 7985
     },
     {
       "sku": "2314-001822",
       "purchaseLimit": 4304,
       "stock": 12,
-      "sales28": 1
+      "sales28": 1,
+      "lastSalePrice": 4770
     },
     {
       "sku": "2314-000889",
@@ -798,7 +825,8 @@
       "sku": "2314-001743",
       "purchaseLimit": 3555.6,
       "stock": 8,
-      "sales28": 3
+      "sales28": 3,
+      "lastSalePrice": 5850
     },
     {
       "sku": "2314-001249",
@@ -944,5 +972,6 @@
       "stock": 0,
       "sales28": 1
     }
-  ]
+  ],
+  "lastSalePriceSyncedAt": "2026-03-25T01:57:49.396Z"
 }
