@@ -6,233 +6,291 @@
       "sku": "2314-000546",
       "purchaseLimit": 953.1336956521739,
       "stock": 53,
-      "sales28": 92,
+      "sales28": 11,
       "lastSalePrice": 1640,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 2,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-001333",
       "purchaseLimit": 3134,
       "stock": 6,
-      "sales28": 7,
+      "sales28": 1,
       "lastSalePrice": 4300,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001246",
       "purchaseLimit": 3816.1400000000003,
       "stock": 0,
-      "sales28": 13,
+      "sales28": 0,
       "lastSalePrice": 5175,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-05"
     },
     {
       "sku": "2314-001452",
       "purchaseLimit": 1422.0641666666666,
       "stock": 286,
-      "sales28": 120,
+      "sales28": 48,
       "lastSalePrice": 1950,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 12,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001515",
       "purchaseLimit": 5638.185714285713,
       "stock": 29,
-      "sales28": 14,
+      "sales28": 2,
       "lastSalePrice": 7370,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001395",
       "purchaseLimit": 11775.43157894737,
       "stock": 0,
-      "sales28": 19,
+      "sales28": 0,
       "lastSalePrice": 12940,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-19"
     },
     {
       "sku": "2314-000538",
       "purchaseLimit": 1142,
       "stock": 5,
-      "sales28": 2,
+      "sales28": 1,
       "lastSalePrice": 1980,
-      "deliveryType": "メール便(日本郵便)"
+      "deliveryType": "メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-001067",
       "purchaseLimit": 3696.536,
       "stock": 23,
-      "sales28": 35,
+      "sales28": 2,
       "lastSalePrice": 4250,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-001077",
       "purchaseLimit": 14401.942000000003,
       "stock": 73,
-      "sales28": 20,
+      "sales28": 0,
       "lastSalePrice": 16980,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-19"
     },
     {
       "sku": "2314-001164",
       "purchaseLimit": 7776.114285714286,
       "stock": 10,
-      "sales28": 7,
+      "sales28": 2,
       "lastSalePrice": 10260,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001760",
       "purchaseLimit": 1505,
       "stock": 0,
-      "sales28": 1,
+      "sales28": 0,
       "lastSalePrice": 2250,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-05"
     },
     {
       "sku": "2314-001030",
       "purchaseLimit": 5922.200000000001,
       "stock": 17,
-      "sales28": 13,
+      "sales28": 0,
       "lastSalePrice": 8140,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-19"
     },
     {
       "sku": "2314-001787",
       "purchaseLimit": 8692.58947368421,
       "stock": 39,
-      "sales28": 38,
+      "sales28": 4,
       "lastSalePrice": 11620,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 3,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001811",
       "purchaseLimit": 3903.6,
       "stock": 37,
-      "sales28": 27,
+      "sales28": 1,
       "lastSalePrice": 5280,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-000192",
       "purchaseLimit": 4651.3294117647065,
       "stock": 2,
-      "sales28": 17,
+      "sales28": 4,
       "lastSalePrice": 6980,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-13"
     },
     {
       "sku": "2314-001057",
       "purchaseLimit": 3841.6549999999997,
       "stock": 3,
-      "sales28": 8,
+      "sales28": 0,
       "lastSalePrice": 5176,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-05"
     },
     {
       "sku": "2314-001782",
       "purchaseLimit": 6905.759999999999,
       "stock": 79,
-      "sales28": 30,
+      "sales28": 3,
       "lastSalePrice": 9540,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-001541",
       "purchaseLimit": 4209.1,
       "stock": 18,
-      "sales28": 6,
+      "sales28": 1,
       "lastSalePrice": 5680,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-001292",
       "purchaseLimit": 2602.8199999999997,
       "stock": 6,
-      "sales28": 4,
+      "sales28": 0,
       "lastSalePrice": 3258,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-19"
     },
     {
       "sku": "2314-001222",
       "purchaseLimit": 9947.111111111113,
       "stock": 56,
-      "sales28": 9,
+      "sales28": 0,
       "lastSalePrice": 13500,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-05"
     },
     {
       "sku": "2314-001786",
       "purchaseLimit": 9884.105882352942,
       "stock": 28,
-      "sales28": 17,
+      "sales28": 1,
       "lastSalePrice": 12700,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001072",
       "purchaseLimit": 4758.49,
       "stock": 0,
-      "sales28": 40,
+      "sales28": 0,
       "lastSalePrice": 5480,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-19"
     },
     {
       "sku": "2314-001392",
       "purchaseLimit": 5543.4857142857145,
       "stock": 25,
-      "sales28": 21,
+      "sales28": 1,
       "lastSalePrice": 5240,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001300",
       "purchaseLimit": 1658.5,
       "stock": 15,
-      "sales28": 18,
+      "sales28": 0,
       "lastSalePrice": 2380,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-19"
     },
     {
       "sku": "2314-001346",
       "purchaseLimit": 3672.2,
       "stock": 6,
-      "sales28": 12,
+      "sales28": 0,
       "lastSalePrice": 5000,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-12"
     },
     {
       "sku": "2314-001233",
       "purchaseLimit": 5715.502439024391,
       "stock": 63,
-      "sales28": 41,
+      "sales28": 1,
       "lastSalePrice": 8200,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001840",
       "purchaseLimit": 2920.188235294118,
       "stock": 21,
-      "sales28": 17,
+      "sales28": 1,
       "lastSalePrice": 4760,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-001850",
       "purchaseLimit": 4444.4,
       "stock": 33,
-      "sales28": 13,
+      "sales28": 3,
       "lastSalePrice": 5000,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001350",
       "purchaseLimit": 5983.032258064517,
       "stock": 9,
-      "sales28": 31,
+      "sales28": 2,
       "lastSalePrice": 6780,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001376",
@@ -244,113 +302,141 @@
       "sku": "2314-001304",
       "purchaseLimit": 6904,
       "stock": 10,
-      "sales28": 9,
+      "sales28": 1,
       "lastSalePrice": 9200,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-27"
     },
     {
       "sku": "2314-001844",
       "purchaseLimit": 4522.4,
       "stock": 20,
-      "sales28": 13,
+      "sales28": 2,
       "lastSalePrice": 5000,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-13"
     },
     {
       "sku": "2314-001039",
       "purchaseLimit": 2351.8,
       "stock": 0,
-      "sales28": 1,
+      "sales28": 3,
       "lastSalePrice": 3800,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-0001070",
       "purchaseLimit": 4023.1517241379306,
       "stock": 3,
-      "sales28": 29,
+      "sales28": 7,
       "lastSalePrice": 5980,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001265",
       "purchaseLimit": 2848.6400000000003,
       "stock": 7,
-      "sales28": 13,
+      "sales28": 1,
       "lastSalePrice": 3820,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001457",
       "purchaseLimit": 2980.6,
       "stock": 57,
-      "sales28": 18,
+      "sales28": 2,
       "lastSalePrice": 3880,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 2,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001360",
       "purchaseLimit": 3625.780487804878,
       "stock": 26,
-      "sales28": 41,
+      "sales28": 3,
       "lastSalePrice": 4980,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-000278",
       "purchaseLimit": 10505.104,
       "stock": 12,
-      "sales28": 25,
+      "sales28": 3,
       "lastSalePrice": 14890,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-000575",
       "purchaseLimit": 1570.3999999999999,
       "stock": 14,
-      "sales28": 15,
+      "sales28": 0,
       "lastSalePrice": 2523,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-22"
     },
     {
       "sku": "2314-000854",
       "purchaseLimit": 4094.1090909090913,
       "stock": 43,
-      "sales28": 11,
+      "sales28": 2,
       "lastSalePrice": 5380,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-000699",
       "purchaseLimit": 3947.7881818181813,
       "stock": 22,
-      "sales28": 22,
+      "sales28": 0,
       "lastSalePrice": 5300,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-22"
     },
     {
       "sku": "2314-001154",
       "purchaseLimit": 1190,
       "stock": 91,
-      "sales28": 15,
+      "sales28": 1,
       "lastSalePrice": 1780,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001819",
       "purchaseLimit": 3559.5333333333333,
       "stock": 20,
-      "sales28": 9,
+      "sales28": 6,
       "lastSalePrice": 4980,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001270",
       "purchaseLimit": 7624.2625,
       "stock": 18,
-      "sales28": 32,
+      "sales28": 2,
       "lastSalePrice": 8980,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001632",
@@ -362,41 +448,51 @@
       "sku": "2314-001678",
       "purchaseLimit": 3396.08,
       "stock": 21,
-      "sales28": 9,
+      "sales28": 1,
       "lastSalePrice": 4450,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001351",
       "purchaseLimit": 4050.5,
       "stock": 9,
-      "sales28": 12,
+      "sales28": 3,
       "lastSalePrice": 5450,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-001180",
       "purchaseLimit": 2785.8363636363633,
       "stock": 27,
-      "sales28": 11,
+      "sales28": 1,
       "lastSalePrice": 3520,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-000752",
       "purchaseLimit": 3684.0950000000003,
       "stock": 19,
-      "sales28": 4,
+      "sales28": 0,
       "lastSalePrice": 4950,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-15"
     },
     {
       "sku": "2314-001097",
       "purchaseLimit": 2308.7000000000003,
       "stock": 23,
-      "sales28": 13,
+      "sales28": 0,
       "lastSalePrice": 2960,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-29"
     },
     {
       "sku": "2314-001679",
@@ -408,9 +504,11 @@
       "sku": "2314-000521",
       "purchaseLimit": 2630.6587050359713,
       "stock": 51,
-      "sales28": 139,
+      "sales28": 1,
       "lastSalePrice": 3150,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001641",
@@ -422,81 +520,101 @@
       "sku": "2314-000739",
       "purchaseLimit": 4421.542608695651,
       "stock": 15,
-      "sales28": 23,
+      "sales28": 1,
       "lastSalePrice": 3300,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001462",
       "purchaseLimit": 3370.184,
       "stock": 5,
-      "sales28": 20,
+      "sales28": 2,
       "lastSalePrice": 3300,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-13"
     },
     {
       "sku": "2314-001052",
       "purchaseLimit": 4276.622,
       "stock": 16,
-      "sales28": 20,
+      "sales28": 2,
       "lastSalePrice": 3150,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-001788",
       "purchaseLimit": 10732.142857142857,
       "stock": 0,
-      "sales28": 14,
+      "sales28": 1,
       "lastSalePrice": 12800,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-000613",
       "purchaseLimit": 2884.4,
       "stock": 1,
-      "sales28": 4,
+      "sales28": 0,
       "lastSalePrice": 3980,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-01"
     },
     {
       "sku": "2314-001283",
       "purchaseLimit": 449,
       "stock": 96,
-      "sales28": 6,
+      "sales28": 0,
       "lastSalePrice": 824,
-      "deliveryType": "メール便(日本郵便)"
+      "deliveryType": "メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-15"
     },
     {
       "sku": "2314-001284",
       "purchaseLimit": 220.17499999999995,
       "stock": 37,
-      "sales28": 12,
+      "sales28": 2,
       "lastSalePrice": 754,
-      "deliveryType": "メール便(日本郵便)"
+      "deliveryType": "メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-27"
     },
     {
       "sku": "2314-001718",
       "purchaseLimit": 3732.4,
       "stock": 32,
-      "sales28": 6,
+      "sales28": 1,
       "lastSalePrice": 5580,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001247",
       "purchaseLimit": 5937.894736842105,
       "stock": 20,
-      "sales28": 38,
+      "sales28": 3,
       "lastSalePrice": 7500,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001852",
       "purchaseLimit": 2599.142857142857,
       "stock": 9,
-      "sales28": 14,
+      "sales28": 2,
       "lastSalePrice": 3980,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-001530",
@@ -514,9 +632,11 @@
       "sku": "2314-001820",
       "purchaseLimit": 3825.0799999999995,
       "stock": 40,
-      "sales28": 10,
+      "sales28": 3,
       "lastSalePrice": 4980,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-001646",
@@ -528,9 +648,11 @@
       "sku": "2314-001325",
       "purchaseLimit": 7183.4222222222215,
       "stock": 0,
-      "sales28": 9,
+      "sales28": 2,
       "lastSalePrice": 9980,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001430",
@@ -542,9 +664,11 @@
       "sku": "2314-001652",
       "purchaseLimit": 2171.0857142857144,
       "stock": 6,
-      "sales28": 7,
+      "sales28": 1,
       "lastSalePrice": 3480,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001338",
@@ -556,9 +680,11 @@
       "sku": "2314-001313",
       "purchaseLimit": 1293.2,
       "stock": 60,
-      "sales28": 15,
+      "sales28": 1,
       "lastSalePrice": 1520,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001220",
@@ -582,25 +708,31 @@
       "sku": "2314-001396",
       "purchaseLimit": 5058.4,
       "stock": 0,
-      "sales28": 13,
+      "sales28": 0,
       "lastSalePrice": 7280,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-19"
     },
     {
       "sku": "2314-000559",
       "purchaseLimit": 2785.6,
       "stock": 7,
-      "sales28": 3,
+      "sales28": 0,
       "lastSalePrice": 3545,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2025-12-25"
     },
     {
       "sku": "2314-001818",
       "purchaseLimit": 3831.7800000000007,
       "stock": 15,
-      "sales28": 12,
+      "sales28": 1,
       "lastSalePrice": 5618,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-001824",
@@ -612,33 +744,41 @@
       "sku": "2314-000815",
       "purchaseLimit": 5911.6,
       "stock": 14,
-      "sales28": 10,
+      "sales28": 0,
       "lastSalePrice": 6910,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-29"
     },
     {
       "sku": "2314-000939",
       "purchaseLimit": 7234.4,
       "stock": 14,
-      "sales28": 5,
+      "sales28": 0,
       "lastSalePrice": 8400,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-29"
     },
     {
       "sku": "2314-000519",
       "purchaseLimit": 4547.75,
       "stock": 0,
-      "sales28": 4,
+      "sales28": 1,
       "lastSalePrice": 6150,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-001848",
       "purchaseLimit": 4835.284000000001,
       "stock": 12,
-      "sales28": 15,
+      "sales28": 3,
       "lastSalePrice": 6380,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 2,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-000520",
@@ -650,17 +790,21 @@
       "sku": "2314-001596",
       "purchaseLimit": 4548.725,
       "stock": 12,
-      "sales28": 32,
+      "sales28": 2,
       "lastSalePrice": 6080,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001843",
       "purchaseLimit": 3223.7,
       "stock": 11,
-      "sales28": 6,
+      "sales28": 2,
       "lastSalePrice": 4400,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001525",
@@ -672,17 +816,21 @@
       "sku": "2314-000724",
       "purchaseLimit": 3347.7714285714283,
       "stock": 22,
-      "sales28": 7,
+      "sales28": 2,
       "lastSalePrice": 5000,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-000835",
       "purchaseLimit": 2122.435,
       "stock": 30,
-      "sales28": 36,
+      "sales28": 6,
       "lastSalePrice": 3180,
-      "deliveryType": "メール便(日本郵便)"
+      "deliveryType": "メール便(日本郵便)",
+      "sales7": 2,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001742",
@@ -694,41 +842,51 @@
       "sku": "2314-001498",
       "purchaseLimit": 3445.1789473684207,
       "stock": 21,
-      "sales28": 19,
+      "sales28": 2,
       "lastSalePrice": 5280,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001529",
       "purchaseLimit": 1639.3700000000001,
       "stock": 7,
-      "sales28": 10,
+      "sales28": 1,
       "lastSalePrice": 2399,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001842",
       "purchaseLimit": 4917.826086956521,
       "stock": 18,
-      "sales28": 23,
+      "sales28": 5,
       "lastSalePrice": 6450,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 3,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001830",
       "purchaseLimit": 3137.3149999999996,
       "stock": 3,
-      "sales28": 4,
+      "sales28": 1,
       "lastSalePrice": 3979,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001636",
       "purchaseLimit": 6026,
       "stock": 32,
-      "sales28": 26,
+      "sales28": 3,
       "lastSalePrice": 7500,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 2,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-0001081",
@@ -740,33 +898,41 @@
       "sku": "2314-001441",
       "purchaseLimit": 3271.475,
       "stock": 6,
-      "sales28": 4,
+      "sales28": 0,
       "lastSalePrice": 4475,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2025-12-25"
     },
     {
       "sku": "2314-001645",
       "purchaseLimit": 4773.95,
       "stock": 2,
-      "sales28": 4,
+      "sales28": 1,
       "lastSalePrice": 6410,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-13"
     },
     {
       "sku": "2314-001851",
       "purchaseLimit": 3898.4,
       "stock": 8,
-      "sales28": 13,
+      "sales28": 2,
       "lastSalePrice": 5280,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 2,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-001088",
       "purchaseLimit": 1738.8125,
       "stock": 113,
-      "sales28": 16,
+      "sales28": 4,
       "lastSalePrice": 2670,
-      "deliveryType": "メール便(日本郵便)"
+      "deliveryType": "メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001680",
@@ -778,9 +944,11 @@
       "sku": "2314-001235",
       "purchaseLimit": 2354.975,
       "stock": 12,
-      "sales28": 8,
+      "sales28": 3,
       "lastSalePrice": 3160,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 2,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001739",
@@ -792,17 +960,21 @@
       "sku": "2314-001347",
       "purchaseLimit": 5284.4,
       "stock": 6,
-      "sales28": 1,
+      "sales28": 0,
       "lastSalePrice": 4400,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2025-12-25"
     },
     {
       "sku": "2314-001815",
       "purchaseLimit": 6176,
       "stock": 16,
-      "sales28": 5,
+      "sales28": 0,
       "lastSalePrice": 8160,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-12"
     },
     {
       "sku": "2314-001398",
@@ -810,31 +982,39 @@
       "stock": 47,
       "sales28": 2,
       "lastSalePrice": 7020,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001822",
       "purchaseLimit": 4304,
       "stock": 12,
-      "sales28": 1,
+      "sales28": 0,
       "lastSalePrice": 4770,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-08"
     },
     {
       "sku": "2314-000889",
       "purchaseLimit": 3256.5714285714284,
       "stock": 0,
-      "sales28": 14,
+      "sales28": 0,
       "lastSalePrice": 4141,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-15"
     },
     {
       "sku": "2314-001854",
       "purchaseLimit": 3663.6200000000003,
       "stock": 1,
-      "sales28": 2,
+      "sales28": 0,
       "lastSalePrice": 4979,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-29"
     },
     {
       "sku": "2314-001828",
@@ -846,9 +1026,11 @@
       "sku": "2314-001816",
       "purchaseLimit": 7181.75,
       "stock": 14,
-      "sales28": 4,
+      "sales28": 1,
       "lastSalePrice": 9900,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-001849",
@@ -860,25 +1042,31 @@
       "sku": "2314-001227",
       "purchaseLimit": 2764.4,
       "stock": 37,
-      "sales28": 1,
+      "sales28": 2,
       "lastSalePrice": 3980,
-      "deliveryType": "メール便(日本郵便)"
+      "deliveryType": "メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-000710",
       "purchaseLimit": 3853.290000000001,
       "stock": 0,
-      "sales28": 24,
+      "sales28": 1,
       "lastSalePrice": 6000,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-001838",
       "purchaseLimit": 3100.4,
       "stock": 0,
-      "sales28": 3,
+      "sales28": 1,
       "lastSalePrice": 4680,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-0001022",
@@ -890,9 +1078,11 @@
       "sku": "2314-001831",
       "purchaseLimit": 6971.21,
       "stock": 90,
-      "sales28": 6,
+      "sales28": 5,
       "lastSalePrice": 8400,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 3,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001821",
@@ -904,41 +1094,51 @@
       "sku": "2314-001262",
       "purchaseLimit": 4387.6,
       "stock": 3,
-      "sales28": 3,
+      "sales28": 1,
       "lastSalePrice": 6420,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-000698",
       "purchaseLimit": 2503.37,
       "stock": 20,
-      "sales28": 2,
+      "sales28": 1,
       "lastSalePrice": 3450,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-13"
     },
     {
       "sku": "2314-000574",
       "purchaseLimit": 6246.4,
       "stock": 2,
-      "sales28": 3,
+      "sales28": 0,
       "lastSalePrice": 8780,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-12"
     },
     {
       "sku": "2314-000534",
       "purchaseLimit": 4792.4,
       "stock": 0,
-      "sales28": 1,
+      "sales28": 0,
       "lastSalePrice": 6580,
-      "deliveryType": "メール便(日本郵便)"
+      "deliveryType": "メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-12"
     },
     {
       "sku": "2314-001328",
       "purchaseLimit": 2776.342857142857,
       "stock": 6,
-      "sales28": 7,
+      "sales28": 1,
       "lastSalePrice": 4380,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001373",
@@ -946,7 +1146,9 @@
       "stock": 17,
       "sales28": 2,
       "lastSalePrice": 6950,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-13"
     },
     {
       "sku": "2314-001745",
@@ -964,9 +1166,11 @@
       "sku": "2314-001393",
       "purchaseLimit": 7554.4,
       "stock": 11,
-      "sales28": 2,
+      "sales28": 1,
       "lastSalePrice": 9980,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-27"
     },
     {
       "sku": "2314-001790",
@@ -978,25 +1182,31 @@
       "sku": "2314-000741",
       "purchaseLimit": 1905.5,
       "stock": 11,
-      "sales28": 2,
+      "sales28": 1,
       "lastSalePrice": 2640,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-000284",
       "purchaseLimit": 3268.55,
       "stock": 0,
-      "sales28": 2,
+      "sales28": 1,
       "lastSalePrice": 4445,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-19"
     },
     {
       "sku": "2314-001483",
       "purchaseLimit": 9200,
       "stock": 3,
-      "sales28": 5,
+      "sales28": 0,
       "lastSalePrice": 12600,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-15"
     },
     {
       "sku": "2314-001657",
@@ -1008,9 +1218,11 @@
       "sku": "2314-001743",
       "purchaseLimit": 3555.6,
       "stock": 8,
-      "sales28": 3,
+      "sales28": 5,
       "lastSalePrice": 5240,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-001249",
@@ -1022,25 +1234,31 @@
       "sku": "2314-000695",
       "purchaseLimit": 4709.6,
       "stock": 4,
-      "sales28": 1,
+      "sales28": 0,
       "lastSalePrice": 5980,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-15"
     },
     {
       "sku": "2314-001296",
       "purchaseLimit": 1273.5714285714287,
       "stock": 46,
-      "sales28": 14,
+      "sales28": 1,
       "lastSalePrice": 2000,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001845",
       "purchaseLimit": 3326.6,
       "stock": 0,
-      "sales28": 1,
+      "sales28": 0,
       "lastSalePrice": 4970,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-29"
     },
     {
       "sku": "2314-001572",
@@ -1052,17 +1270,21 @@
       "sku": "2314-001394",
       "purchaseLimit": 9915.125714285716,
       "stock": 19,
-      "sales28": 7,
+      "sales28": 3,
       "lastSalePrice": 9338,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-05"
     },
     {
       "sku": "2314-000188",
       "purchaseLimit": 2639.675,
       "stock": 9,
-      "sales28": 16,
+      "sales28": 1,
       "lastSalePrice": 5280,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001690",
@@ -1092,9 +1314,11 @@
       "sku": "2314-000614",
       "purchaseLimit": 2356.6,
       "stock": 4,
-      "sales28": 3,
+      "sales28": 1,
       "lastSalePrice": 3270,
-      "deliveryType": "追跡可能メール便(日本郵便)"
+      "deliveryType": "追跡可能メール便(日本郵便)",
+      "sales7": 1,
+      "lastSaleDate": "2026-03-20"
     },
     {
       "sku": "2314-001324",
@@ -1136,9 +1360,11 @@
       "sku": "2314-001738",
       "purchaseLimit": 8490.4,
       "stock": 4,
-      "sales28": 1,
+      "sales28": 0,
       "lastSalePrice": 11960,
-      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)"
+      "deliveryType": "宅配便(日本郵便 楽天倉庫出荷)",
+      "sales7": 0,
+      "lastSaleDate": "2026-01-29"
     },
     {
       "sku": "2314-001584",
@@ -1146,7 +1372,9 @@
       "stock": 8,
       "sales28": 1,
       "lastSalePrice": 13720,
-      "deliveryType": "宅配便(佐川急便)"
+      "deliveryType": "宅配便(佐川急便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-02-26"
     },
     {
       "sku": "2314-001260",
@@ -1160,7 +1388,9 @@
       "stock": 24,
       "sales28": 1,
       "lastSalePrice": 4980,
-      "deliveryType": "メール便(日本郵便)"
+      "deliveryType": "メール便(日本郵便)",
+      "sales7": 0,
+      "lastSaleDate": "2026-03-12"
     },
     {
       "sku": "2314-001791",
@@ -1175,5 +1405,5 @@
       "sales28": 1
     }
   ],
-  "lastSalePriceSyncedAt": "2026-03-25T02:55:19.014Z"
+  "lastSalePriceSyncedAt": "2026-03-25T03:13:18.639Z"
 }

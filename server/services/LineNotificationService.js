@@ -151,9 +151,14 @@ class LineNotificationService {
     const sales28       = (crossmallInfo?.sales28 != null && crossmallInfo.sales28 > 0)
       ? crossmallInfo.sales28
       : (master?.sales28 ?? crossmallInfo?.sales28 ?? null);
+    const sales7        = master?.sales7 ?? null;
+    const lastSaleDate  = master?.lastSaleDate ?? null;
     const lastSalePrice = crossmallInfo?.price  != null ? Number(crossmallInfo.price)
                         : master?.lastSalePrice != null ? Number(master.lastSalePrice)
                         : null;
+
+    // 最終販売日の表示フォーマット (YYYY-MM-DD → M/D)
+    const lastSaleDateDisp = lastSaleDate ? lastSaleDate.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1/$2') : '─';
 
     // 送料・利益見込み計算
     const deliveryType = crossmallInfo?.deliveryType || master?.deliveryType || '';
@@ -173,7 +178,7 @@ class LineNotificationService {
       `¥${price.toLocaleString()}`,
       `🔗 ${product?.url || '─'}`,
       '',
-      `📦 在庫${stock != null ? stock : '─'}個 | 28日販売${sales28 != null ? sales28 : '─'}個`,
+      `📦 在庫${stock != null ? stock : '─'}個 | 28日${sales28 != null ? sales28 : '─'}個 | 7日${sales7 != null ? sales7 : '─'}個 | 最終${lastSaleDateDisp}`,
       `💰 直近販売¥${lastSalePrice != null ? lastSalePrice.toLocaleString() : '─'} | 上限仕入¥${purchaseLimit != null ? Math.round(purchaseLimit).toLocaleString() : '─'}`,
     ];
 
@@ -267,7 +272,9 @@ class LineNotificationService {
       if (crossmallInfo || master) {
         const dispStock = stock ?? master?.stock ?? null;
         const dispSales = sales28 ?? master?.sales28 ?? null;
-        msg += `📦 在庫${dispStock != null ? dispStock : '─'}個 | 28日販売${dispSales != null ? dispSales : '─'}個\n`;
+        const dispSales7 = master?.sales7 ?? null;
+        const dispLastDate = master?.lastSaleDate ? master.lastSaleDate.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1/$2') : '─';
+        msg += `📦 在庫${dispStock != null ? dispStock : '─'}個 | 28日${dispSales != null ? dispSales : '─'}個 | 7日${dispSales7 != null ? dispSales7 : '─'}個 | 最終${dispLastDate}\n`;
         msg += `💰 直近販売¥${lastSalePrice != null ? lastSalePrice.toLocaleString() : '─'}\n`;
         if (lastSalePrice != null && price > 0) {
           const profit = calcProfit(lastSalePrice, shippingCost, price);

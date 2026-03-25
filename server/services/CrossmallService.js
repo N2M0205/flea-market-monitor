@@ -167,7 +167,8 @@ class CrossmallService {
       if (!r.order_number) continue;
       orderNumbers.push(r.order_number);
       orderMeta.set(r.order_number, {
-        deliveryType: r.delivery_type_name || ''
+        deliveryType: r.delivery_type_name || '',
+        orderDate: r.order_date || ''
       });
     }
 
@@ -340,9 +341,9 @@ class CrossmallService {
     }
   }
   /**
-   * 全注文から全SKUの最新販売価格＋配送種別をまとめて取得
+   * 全注文から全SKUの最新販売価格＋配送種別＋販売統計をまとめて取得
    * @param {number} days - 過去何日間を対象にするか
-   * @returns {Map<string, { price: number, orderNumber: string, deliveryType: string }>}
+   * @returns {Map<string, { price, deliveryType, sales7, sales28, lastSaleDate }>}
    */
   async getAllLastSalePrices(days = 90) {
     console.log(`🔍 CROSSMALL 全SKU販売価格一括取得開始 (過去${days}日間)`);
@@ -353,8 +354,15 @@ class CrossmallService {
       return new Map();
     }
 
-    // 全注文の詳細を取得して、SKUごとに最新価格を記録
-    // orderNumbersは昇順（古い順）なので、後のものが新しい
+    const now = new Date();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    const twentyEightDaysAgo = new Date();
+    twentyEightDaysAgo.setDate(now.getDate() - 28);
+
+    // SKUごとに集計用のデータを保持
+    // priceMapは最終結果、statsMapは集計中間データ
+    const statsMap = new Map(); // item_code → { sales7, sales28, lastSaleDate }
     const priceMap = new Map();
     let processed = 0;
 
@@ -362,13 +370,35 @@ class CrossmallService {
       const details = await this.getOrderDetail(orderNumber);
       const meta = orderMetaMap.get(orderNumber);
 
+      // order_dateをパース ("2026/01/15 12:34:56" 形式)
+      const orderDateStr = meta?.orderDate || '';
+      const orderDate = orderDateStr ? new Date(orderDateStr.replace(/\//g, '-')) : null;
+
       for (const d of details) {
         if (d.item_code && d.unit_price > 0) {
+          // 最新価格・配送種別を更新（後の注文が新しいので上書き）
           priceMap.set(d.item_code, {
             price: d.unit_price,
             orderNumber: d.order_number,
             deliveryType: meta?.deliveryType || ''
           });
+
+          // 販売統計を集計
+          if (!statsMap.has(d.item_code)) {
+            statsMap.set(d.item_code, { sales7: 0, sales28: 0, lastSaleDate: null });
+          }
+          const stats = statsMap.get(d.item_code);
+
+          if (orderDate) {
+            // 最終販売日を更新
+            if (!stats.lastSaleDate || orderDate > stats.lastSaleDate) {
+              stats.lastSaleDate = orderDate;
+            }
+            // 28日以内の販売
+            if (orderDate >= twentyEightDaysAgo) stats.sales28++;
+            // 7日以内の販売
+            if (orderDate >= sevenDaysAgo) stats.sales7++;
+          }
         }
       }
       processed++;
@@ -376,6 +406,16 @@ class CrossmallService {
         console.log(`  ${processed}/${orderNumbers.length} 注文処理済み`);
       }
       await new Promise(r => setTimeout(r, 30));
+    }
+
+    // statsMapをpriceMapに統合
+    for (const [itemCode, entry] of priceMap) {
+      const stats = statsMap.get(itemCode);
+      if (stats) {
+        entry.sales7 = stats.sales7;
+        entry.sales28 = stats.sales28;
+        entry.lastSaleDate = stats.lastSaleDate ? this._formatDate(stats.lastSaleDate) : null;
+      }
     }
 
     console.log(`✅ 全SKU販売価格取得完了: ${priceMap.size}種類のSKU`);

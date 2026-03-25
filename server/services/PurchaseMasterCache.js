@@ -98,6 +98,9 @@ class PurchaseMasterCache {
       if (item) {
         item.lastSalePrice = info.price;
         if (info.deliveryType) item.deliveryType = info.deliveryType;
+        if (info.sales7 != null) item.sales7 = info.sales7;
+        if (info.sales28 != null) item.sales28 = info.sales28;
+        if (info.lastSaleDate) item.lastSaleDate = info.lastSaleDate;
         updated++;
       } else {
         notFound++;
@@ -111,6 +114,9 @@ class PurchaseMasterCache {
       if (priceInfo) {
         item.lastSalePrice = priceInfo.price;
         if (priceInfo.deliveryType) item.deliveryType = priceInfo.deliveryType;
+        if (priceInfo.sales7 != null) item.sales7 = priceInfo.sales7;
+        if (priceInfo.sales28 != null) item.sales28 = priceInfo.sales28;
+        if (priceInfo.lastSaleDate) item.lastSaleDate = priceInfo.lastSaleDate;
       }
     }
 
