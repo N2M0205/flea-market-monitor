@@ -177,7 +177,7 @@ class CrossmallService {
 
   /**
    * 過去N日間の注文番号リスト＋メタ情報を取得
-   * API上限100件/リクエストのため、7日間ごとに分割して取得
+   * API上限100件/リクエストのため、1日ごとに分割して取得
    * @returns {{ orderNumbers: string[], orderMetaMap: Map<string, { deliveryType: string }> }}
    */
   async getOrderNumbers(days = 28) {
@@ -186,13 +186,13 @@ class CrossmallService {
       const globalStart = new Date();
       globalStart.setDate(now.getDate() - days);
 
-      const CHUNK_DAYS = 7;
+      const CHUNK_DAYS = 1;
       const orderSet = new Set();
       const orderMetaMap = new Map();
 
       console.log(`🔍 注文番号取得: ${this._formatDate(globalStart)} ~ ${this._formatDate(now)} (${CHUNK_DAYS}日分割)`);
 
-      // 古い方から新しい方へ7日ずつ取得
+      // 古い方から新しい方へ1日ずつ取得
       let chunkStart = new Date(globalStart);
       let chunkIndex = 0;
 
