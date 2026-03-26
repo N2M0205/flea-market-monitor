@@ -224,6 +224,13 @@ class CrossmallService {
   /**
    * 注文詳細から商品コードの販売価格を取得
    */
+  /**
+   * 指定日付範囲の注文を取得（公開API）
+   */
+  async fetchOrdersForRange(fromDate, toDate) {
+    return this._fetchOrdersForRange(fromDate, toDate);
+  }
+
   async getOrderDetail(orderNumber) {
     try {
       const result = await this.makeRequest('get_order_detail', {
