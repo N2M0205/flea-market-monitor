@@ -208,13 +208,15 @@ class ScrapingService {
 
     console.log(`🎯 対象プラットフォーム: ${platforms.join(', ')}`);
 
-    for (const platform of platforms) {
-      try {
-        await this.scrapePlatform(keyword, platform, layerAConfig);
-      } catch (error) {
-        console.error(`❌ プラットフォーム "${platform}" のスクレイピングエラー:`, error.message);
+    const platformResults = await Promise.allSettled(
+      platforms.map(platform => this.scrapePlatform(keyword, platform, layerAConfig))
+    );
+
+    platformResults.forEach((result, idx) => {
+      if (result.status === 'rejected') {
+        console.error(`❌ プラットフォーム "${platforms[idx]}" のスクレイピングエラー:`, result.reason?.message);
       }
-    }
+    });
   }
 
   async scrapePlatform(keyword, platform, layerAConfig) {
