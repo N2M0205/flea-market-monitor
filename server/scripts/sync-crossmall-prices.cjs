@@ -192,8 +192,49 @@ function logCompletion(startTime, newOrders, updatedItems) {
   console.log(`${'='.repeat(60)}\n`);
 }
 
+/**
+ * 全SKUの在庫数を get_stock APIで取得し、PurchaseMasterCache に反映
+ */
+async function syncStock(crossmall) {
+  const items = purchaseMasterCache._cache.items;
+  if (!items || items.length === 0) {
+    console.log('⚠️ 在庫同期スキップ: マスタが空です');
+    return;
+  }
+
+  console.log(`\n📦 在庫同期開始: ${items.length}件のSKU`);
+
+  let updated = 0;
+  let errors = 0;
+
+  for (const item of items) {
+    const itemCode = String(item.sku || item.crossmall_item_code || '').trim();
+    if (!itemCode) continue;
+
+    try {
+      const stockInfo = await crossmall.getStockInfo(itemCode);
+      if (stockInfo && stockInfo.stock != null) {
+        item.stock = stockInfo.stock;
+        updated++;
+      }
+    } catch (error) {
+      console.error(`  ❌ 在庫取得失敗: ${itemCode} ${error.message}`);
+      errors++;
+    }
+
+    await sleep(FETCH_DELAY_MS);
+  }
+
+  purchaseMasterCache._saveToDisk();
+  console.log(`✅ 在庫同期完了: ${updated}件更新, ${errors}件エラー`);
+}
+
 main()
-  .then(() => process.exit(0))
+  .then(async () => {
+    const crossmall = new CrossmallService();
+    await syncStock(crossmall);
+    process.exit(0);
+  })
   .catch(err => {
     console.error('❌ CROSSMALL販売データ蓄積同期でエラー:', err);
     process.exit(1);
