@@ -3,11 +3,13 @@
  *
  * @file YahooFleaScraper.js
  * @description Yahoo!フリマから商品データを取得するスクレイパー
- * @version 2.1.0
- * @date 2026-03-10
+ * @version 3.0.0
+ * @date 2026-03-27
  *
- * 変更点 v2.1.0:
- *   - 販売中商品のみ取得するフィルタを追加（SOLD OUT・売り切れを除外）
+ * 変更点 v3.0.0:
+ *   - search()ごとにbrowser/pageを独立生成・破棄（並列安全）
+ *   - puppeteer-extra + StealthPlugin でbot検知回避
+ *   - setRequestInterception()で不要リソースをブロック
  *
  * URL構造:
  *   検索: https://paypayfleamarket.yahoo.co.jp/search/{keyword}?page={n}
@@ -16,74 +18,75 @@
 
 'use strict';
 
-const puppeteer = require('puppeteer');
+const puppeteerExtra = require('puppeteer-extra');
+const StealthPlugin  = require('puppeteer-extra-plugin-stealth');
+puppeteerExtra.use(StealthPlugin());
 
 class YahooFleaScraper {
   constructor() {
-    this.browser = null;
-    this.page    = null;
     this.baseUrl = 'https://paypayfleamarket.yahoo.co.jp';
 
     // ERR_ABORTED 連続エラー自動停止
     this.consecutiveAbortCount = 0;
     this.MAX_CONSECUTIVE_ABORTS = 3;
     this.abortedSuspended = false;
+
+    this.userAgents = [
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+    ];
+  }
+
+  _getRandomUserAgent() {
+    return this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
+  }
+
+  _sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   // ─────────────────────────────────────────────
-  // ブラウザ初期化
+  // ブラウザ起動（search()ごとに独立インスタンス）
   // ─────────────────────────────────────────────
-  async initBrowser() {
-    // 前回のブラウザが死んでいたら参照をクリアして再起動
-    if (this.browser) {
-      try {
-        if (!this.browser.isConnected()) {
-          console.log('⚠️ Yahoo!フリマ: 前回のブラウザが切断済み。再起動します');
-          this.browser = null;
-          this.page = null;
-        }
-      } catch (_) {
-        this.browser = null;
-        this.page = null;
-      }
-    }
-    if (this.browser) return;
-
-    console.log('🌐 Yahoo!フリマ Puppeteerブラウザを起動中...');
-
-    this.browser = await puppeteer.launch({
-      headless: true,
+  async _launchBrowser() {
+    const browser = await puppeteerExtra.launch({
+      headless: 'new',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
         '--disable-gpu',
         '--single-process',
-        '--window-size=1920,1080',
+        '--window-size=1366,768',
+        '--lang=ja-JP,ja',
       ],
+      defaultViewport: { width: 1366, height: 768 },
     });
-
-    this.page = await this.browser.newPage();
-
-    await this.page.setViewport({ width: 1920, height: 1080 });
-    await this.page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-      '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    );
-    await this.page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-    });
-
-    console.log('✅ Yahoo!フリマ Puppeteerブラウザ起動完了');
+    return browser;
   }
 
   // ─────────────────────────────────────────────
-  // 待機
+  // ページ設定（Stealth + リクエストフィルタ）
   // ─────────────────────────────────────────────
-  async wait(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  async _setupPage(page) {
+    await page.setUserAgent(this._getRandomUserAgent());
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    });
+
+    // 不要リソースをブロック（高速化 + 帯域節約）
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+      const rt = req.resourceType();
+      if (['image', 'stylesheet', 'font', 'media'].includes(rt)) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
   }
 
   // ─────────────────────────────────────────────
@@ -98,8 +101,11 @@ class YahooFleaScraper {
       return [];
     }
 
+    let browser = null;
     try {
-      await this.initBrowser();
+      browser = await this._launchBrowser();
+      const page = await browser.newPage();
+      await this._setupPage(page);
 
       // ── URL構築 ────────────────────────────────
       const encodedKeyword = encodeURIComponent(keyword);
@@ -107,14 +113,14 @@ class YahooFleaScraper {
       console.log(`🔍 Yahoo!フリマ検索URL: ${searchUrl}`);
 
       // ── ページ読み込み ──────────────────────────
-      await this.page.goto(searchUrl, {
+      await page.goto(searchUrl, {
         waitUntil: 'networkidle2',
         timeout: 90000,
       });
-      await this.wait(3000);
+      await this._sleep(3000);
 
       // ── デバッグスクリーンショット ──────────────
-      await this.page.screenshot({ path: 'debug-yahooflea-page.png' })
+      await page.screenshot({ path: 'debug-yahooflea-page.png' })
         .catch(() => {});
 
       // ── 商品データ抽出 ──────────────────────────
@@ -124,43 +130,36 @@ class YahooFleaScraper {
       // パターン1: a[href*="/item/"] ベース
       // ════════════════════════════════════════════
       try {
-        await this.page.waitForSelector('a[href*="/item/"]', { timeout: 10000 });
+        await page.waitForSelector('a[href*="/item/"]', { timeout: 10000 });
 
-        products = await this.page.evaluate((minPrice, maxPrice) => {
+        products = await page.evaluate((minPrice, maxPrice) => {
           const items = [];
           const links = Array.from(document.querySelectorAll('a[href*="/item/"]'));
 
-          console.log(`[Browser] 商品リンク数: ${links.length}`);
-
           for (const link of links) {
             try {
-              // カード要素
               const card = link.closest('article') ||
                            link.closest('li')      ||
                            link.closest('div[class*="item"]') ||
                            link;
 
-              // ── 販売中チェック（★ 追加）─────────────
+              // 販売中チェック
               const soldEl  = card.querySelector('[class*="sold" i], [class*="SOLD"]');
               const cardText = card.textContent || '';
               const isSold  = soldEl !== null ||
                               cardText.includes('売り切れ') ||
                               cardText.toLowerCase().includes('sold out');
               if (isSold) continue;
-              // ─────────────────────────────────────────
 
-              // 商品ID
               const idMatch = link.href.match(/\/item\/([^/?#]+)/);
               const productId = idMatch ? idMatch[1] : '';
               if (!productId) continue;
 
-              // 画像・タイトル
               const img     = card.querySelector('img') || link.querySelector('img');
               const imageUrl = img?.src || '';
               let title = (img?.alt || link.textContent || '').trim();
               if (!title || title.length < 3) continue;
 
-              // 価格（3段階フォールバック）
               let price = '0';
 
               // 方法1: 円を含む要素
@@ -197,11 +196,10 @@ class YahooFleaScraper {
                 items.push({ product_id: productId, title, price, url, image_url: imageUrl });
               }
             } catch (e) {
-              console.error('[Browser] 商品処理エラー:', e.message);
+              // skip individual item errors
             }
           }
 
-          console.log(`[Browser] パターン1 抽出: ${items.length}件`);
           return items;
         }, min_price, max_price);
 
@@ -218,13 +216,12 @@ class YahooFleaScraper {
         console.log('🔄 パターン2を試行中...');
 
         try {
-          products = await this.page.evaluate((minPrice, maxPrice) => {
+          products = await page.evaluate((minPrice, maxPrice) => {
             const items  = [];
             const images = Array.from(document.querySelectorAll('img[alt]'));
 
             for (const img of images) {
               try {
-                // 親をたどってリンクを探す
                 let link = null;
                 let cur  = img.parentElement;
                 for (let i = 0; i < 5 && cur; i++) {
@@ -247,13 +244,12 @@ class YahooFleaScraper {
                 const card    = link.closest('article') || link.closest('li') || link;
                 const cardText = card.textContent || '';
 
-                // ── 販売中チェック（★ 追加）──────────
+                // 販売中チェック
                 const soldEl  = card.querySelector('[class*="sold" i]');
                 const isSold  = soldEl !== null ||
                                 cardText.includes('売り切れ') ||
                                 cardText.toLowerCase().includes('sold out');
                 if (isSold) continue;
-                // ─────────────────────────────────────
 
                 let price = '0';
                 const m   = cardText.match(/([¥￥]?\s*[\d,]+)\s*円/);
@@ -273,11 +269,10 @@ class YahooFleaScraper {
                   });
                 }
               } catch (e) {
-                console.error('[Browser] パターン2 商品処理エラー:', e.message);
+                // skip individual item errors
               }
             }
 
-            console.log(`[Browser] パターン2 抽出: ${items.length}件`);
             return items;
           }, min_price, max_price);
 
@@ -317,16 +312,12 @@ class YahooFleaScraper {
         if (this.consecutiveAbortCount >= this.MAX_CONSECUTIVE_ABORTS) {
           this.abortedSuspended = true;
           console.error(`🚫 Yahoo!フリマ: ERR_ABORTED ${this.MAX_CONSECUTIVE_ABORTS}回連続のため、今回スキャンの残りキーワードをスキップします`);
-          await this.close();
         }
       }
 
-      // detached Frame / Connection closed → ブラウザを破棄して次回再起動
-      if (error.message.includes('detached') || error.message.includes('Connection closed') || error.message.includes('Protocol error')) {
-        console.log('🔄 Yahoo!フリマ: クラッシュ検知。ブラウザを破棄します');
-        await this.close();
-      }
       return [];
+    } finally {
+      if (browser) await browser.close().catch(() => {});
     }
   }
 
@@ -334,14 +325,18 @@ class YahooFleaScraper {
   // 商品詳細
   // ─────────────────────────────────────────────
   async getProductDetail(productId) {
+    let browser = null;
     try {
-      await this.initBrowser();
+      browser = await this._launchBrowser();
+      const page = await browser.newPage();
+      await this._setupPage(page);
+
       const url = `${this.baseUrl}/item/${productId}`;
       console.log(`🔍 商品詳細取得: ${url}`);
 
-      await this.page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
-      const detail = await this.page.evaluate(() => ({
+      const detail = await page.evaluate(() => ({
         description: document.querySelector('[class*="description"]')?.textContent?.trim() || '',
         condition:   document.querySelector('[class*="condition"]')?.textContent?.trim()   || '',
         seller_name: document.querySelector('[class*="seller"]')?.textContent?.trim()      || '',
@@ -351,24 +346,22 @@ class YahooFleaScraper {
     } catch (error) {
       console.error('❌ 商品詳細取得エラー:', error.message);
       return {};
+    } finally {
+      if (browser) await browser.close().catch(() => {});
     }
   }
 
   // ─────────────────────────────────────────────
-  // ブラウザを閉じる
+  // 状態管理
   // ─────────────────────────────────────────────
   resetAbortState() {
     this.consecutiveAbortCount = 0;
     this.abortedSuspended = false;
   }
 
+  // close() は後方互換のため残置（ScrapingServiceのfinally節から呼ばれる）
   async close() {
-    if (this.browser) {
-      await this.browser.close().catch(() => {});
-      this.browser = null;
-      this.page    = null;
-      console.log('✅ Yahoo!フリマ Puppeteerブラウザを閉じました');
-    }
+    // browser/pageはsearch()ごとにfinallyで閉じるため、ここでは何もしない
   }
 }
 
