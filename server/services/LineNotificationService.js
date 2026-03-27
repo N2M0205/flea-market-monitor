@@ -8,6 +8,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const CrossmallService = require('./CrossmallService');
+const purchaseMasterCache = require('./PurchaseMasterCache');
 
 // 送料辞書（CROSSMALL delivery_type_name → 送料）
 const SHIPPING_COST_MAP = {
@@ -214,11 +215,16 @@ class LineNotificationService {
       const client = await this.getClient();
 
       let crossmallInfo = null;
-      if (keyword?.crossmall_item_code && this.crossmall) {
-        try {
-          crossmallInfo = await this.crossmall.getStockAndPrice(keyword.crossmall_item_code, 28);
-        } catch (e) {
-          console.error('❌ CROSSMALL情報取得エラー:', e?.message || e);
+      if (keyword?.crossmall_item_code) {
+        const master = purchaseMasterCache.getMasterItem(keyword.crossmall_item_code);
+        if (master) {
+          crossmallInfo = {
+            item_code: keyword.crossmall_item_code,
+            stock: master.stock ?? null,
+            price: master.lastSalePrice ?? null,
+            sales28: master.sales28 ?? 0,
+            item_name: null,
+          };
         }
       }
 

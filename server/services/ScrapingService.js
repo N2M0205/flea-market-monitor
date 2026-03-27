@@ -6,7 +6,6 @@ const MercariPuppeteerScraper  = require('./MercariPuppeteerScraper');
 const PayPayPuppeteerScraper   = require('./PayPayPuppeteerScraper');
 const YahooFleaScraper         = require('./YahooFleaScraper');
 const LineNotificationService  = require('./LineNotificationService');
-const CrossmallService         = require('./CrossmallService');
 
 const { loadLayerAConfig, layerAFilter, calcRarityScore } = require('./LayerAFilterService');
 const purchaseMasterCache = require('./PurchaseMasterCache');
@@ -92,7 +91,6 @@ class ScrapingService {
       yahoo_flea:  new YahooFleaScraper(),
     };
     this.lineNotificationService = LineNotificationService;
-    this.crossmallService        = new CrossmallService();
     this.isRunning               = false;
     this.scanCount               = 0;
   }
@@ -281,16 +279,21 @@ class ScrapingService {
     }
     console.log(`  💾 ${newProducts.length}件の新規商品を保存しました`);
 
-    // ④ CROSSMALL情報取得（任意）
+    // ④ CROSSMALL情報取得（キャッシュ参照 — API呼び出しなし）
     let crossmallInfo = null;
     if (keyword.crossmall_item_code) {
-      try {
-        crossmallInfo = await this.crossmallService.getStockAndPrice(
-          keyword.crossmall_item_code, 28
-        );
-        console.log('  ✅ CROSSMALL情報取得成功:', crossmallInfo);
-      } catch (error) {
-        console.error('  ❌ CROSSMALL情報取得エラー:', error.message);
+      const master = purchaseMasterCache.getMasterItem(keyword.crossmall_item_code);
+      if (master) {
+        crossmallInfo = {
+          item_code: keyword.crossmall_item_code,
+          stock: master.stock ?? null,
+          price: master.lastSalePrice ?? null,
+          sales28: master.sales28 ?? 0,
+          item_name: null,
+        };
+        console.log('  ✅ CROSSMALL情報（キャッシュ）:', crossmallInfo);
+      } else {
+        console.log(`  ⚠️ CROSSMALL キャッシュなし: ${keyword.crossmall_item_code}`);
       }
     }
 
