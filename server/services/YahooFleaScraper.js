@@ -20,6 +20,9 @@
 
 const puppeteerExtra = require('puppeteer-extra');
 const StealthPlugin  = require('puppeteer-extra-plugin-stealth');
+const path = require('path');
+const os   = require('os');
+const fs   = require('fs');
 puppeteerExtra.use(StealthPlugin());
 
 class YahooFleaScraper {
@@ -51,7 +54,12 @@ class YahooFleaScraper {
   // ブラウザ起動（search()ごとに独立インスタンス）
   // ─────────────────────────────────────────────
   async _launchBrowser() {
+    const userDataDir = path.join(
+      os.tmpdir(),
+      `puppeteer_yahoo_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    );
     const browser = await puppeteerExtra.launch({
+      userDataDir,
       headless: 'new',
       args: [
         '--no-sandbox',
@@ -64,7 +72,7 @@ class YahooFleaScraper {
       ],
       defaultViewport: { width: 1366, height: 768 },
     });
-    return browser;
+    return { browser, userDataDir };
   }
 
   // ─────────────────────────────────────────────
@@ -102,8 +110,9 @@ class YahooFleaScraper {
     }
 
     let browser = null;
+    let userDataDir = null;
     try {
-      browser = await this._launchBrowser();
+      ({ browser, userDataDir } = await this._launchBrowser());
       const page = await browser.newPage();
       await this._setupPage(page);
 
@@ -318,6 +327,7 @@ class YahooFleaScraper {
       return [];
     } finally {
       if (browser) await browser.close().catch(() => {});
+      if (userDataDir) try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
     }
   }
 
@@ -326,8 +336,9 @@ class YahooFleaScraper {
   // ─────────────────────────────────────────────
   async getProductDetail(productId) {
     let browser = null;
+    let userDataDir = null;
     try {
-      browser = await this._launchBrowser();
+      ({ browser, userDataDir } = await this._launchBrowser());
       const page = await browser.newPage();
       await this._setupPage(page);
 
@@ -348,6 +359,7 @@ class YahooFleaScraper {
       return {};
     } finally {
       if (browser) await browser.close().catch(() => {});
+      if (userDataDir) try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
     }
   }
 
