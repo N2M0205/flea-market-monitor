@@ -23,6 +23,11 @@ class YahooFleaScraper {
     this.browser = null;
     this.page    = null;
     this.baseUrl = 'https://paypayfleamarket.yahoo.co.jp';
+
+    // ERR_ABORTED 連続エラー自動停止
+    this.consecutiveAbortCount = 0;
+    this.MAX_CONSECUTIVE_ABORTS = 3;
+    this.abortedSuspended = false;
   }
 
   // ─────────────────────────────────────────────
@@ -86,6 +91,12 @@ class YahooFleaScraper {
   // ─────────────────────────────────────────────
   async search(keyword, options = {}) {
     const { min_price, max_price, limit = 20 } = options;
+
+    // 連続ERR_ABORTEDで自動停止中ならスキップ
+    if (this.abortedSuspended) {
+      console.log(`⏭️ Yahoo!フリマ: 自動停止中のためスキップ [${keyword}]`);
+      return [];
+    }
 
     try {
       await this.initBrowser();
@@ -292,10 +303,24 @@ class YahooFleaScraper {
       }));
 
       console.log(`✅ Yahoo!フリマ: ${formatted.length}件整形完了`);
+      // 成功したら連続エラーカウンタをリセット
+      this.consecutiveAbortCount = 0;
       return formatted;
 
     } catch (error) {
       console.error('❌ Yahoo!フリマスクレイピングエラー:', error.message);
+
+      // ERR_ABORTED 連続検知 → 自動停止
+      if (error.message.includes('ERR_ABORTED')) {
+        this.consecutiveAbortCount++;
+        console.warn(`⚠️ Yahoo!フリマ ERR_ABORTED 連続 ${this.consecutiveAbortCount}/${this.MAX_CONSECUTIVE_ABORTS} 回`);
+        if (this.consecutiveAbortCount >= this.MAX_CONSECUTIVE_ABORTS) {
+          this.abortedSuspended = true;
+          console.error(`🚫 Yahoo!フリマ: ERR_ABORTED ${this.MAX_CONSECUTIVE_ABORTS}回連続のため、今回スキャンの残りキーワードをスキップします`);
+          await this.close();
+        }
+      }
+
       // detached Frame / Connection closed → ブラウザを破棄して次回再起動
       if (error.message.includes('detached') || error.message.includes('Connection closed') || error.message.includes('Protocol error')) {
         console.log('🔄 Yahoo!フリマ: クラッシュ検知。ブラウザを破棄します');
@@ -332,6 +357,11 @@ class YahooFleaScraper {
   // ─────────────────────────────────────────────
   // ブラウザを閉じる
   // ─────────────────────────────────────────────
+  resetAbortState() {
+    this.consecutiveAbortCount = 0;
+    this.abortedSuspended = false;
+  }
+
   async close() {
     if (this.browser) {
       await this.browser.close().catch(() => {});

@@ -144,14 +144,24 @@ class CrossmallService {
     return `${y}-${m}-${d}`;
   }
 
+  _formatDateTime(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+  }
+
   /**
    * 指定期間の注文を1回のAPIコールで取得（最大100件）
    * @returns {{ orderNumbers: string[], orderMeta: Map<string, { deliveryType: string }> }}
    */
   async _fetchOrdersForRange(fromDate, toDate) {
     const result = await this.makeRequest('get_order', {
-      order_date_fr: this._formatDate(fromDate),
-      order_date_to: this._formatDate(toDate)
+      order_date_fr: this._formatDateTime(fromDate),
+      order_date_to: this._formatDateTime(toDate)
     });
 
     if (!result) return { orderNumbers: [], orderMeta: new Map() };
@@ -185,20 +195,21 @@ class CrossmallService {
       const now = new Date();
       const globalStart = new Date();
       globalStart.setDate(now.getDate() - days);
+      globalStart.setHours(0, 0, 0, 0);
 
-      const CHUNK_DAYS = 1;
+      const CHUNK_HOURS = 3;
       const orderSet = new Set();
       const orderMetaMap = new Map();
 
-      console.log(`🔍 注文番号取得: ${this._formatDate(globalStart)} ~ ${this._formatDate(now)} (${CHUNK_DAYS}日分割)`);
+      console.log(`🔍 注文番号取得: ${this._formatDate(globalStart)} ~ ${this._formatDate(now)} (${CHUNK_HOURS}時間単位分割)`);
 
-      // 古い方から新しい方へ1日ずつ取得
+      // 古い方から新しい方へ3時間ずつ取得
       let chunkStart = new Date(globalStart);
       let chunkIndex = 0;
 
       while (chunkStart < now) {
         const chunkEnd = new Date(chunkStart);
-        chunkEnd.setDate(chunkEnd.getDate() + CHUNK_DAYS - 1);
+        chunkEnd.setHours(chunkEnd.getHours() + CHUNK_HOURS - 1, 59, 59, 0);
         if (chunkEnd > now) chunkEnd.setTime(now.getTime());
 
         const { orderNumbers: numbers, orderMeta } = await this._fetchOrdersForRange(chunkStart, chunkEnd);
@@ -206,9 +217,13 @@ class CrossmallService {
         for (const [k, v] of orderMeta) orderMetaMap.set(k, v);
 
         chunkIndex++;
-        console.log(`  [${chunkIndex}] ${this._formatDate(chunkStart)}~${this._formatDate(chunkEnd)}: ${numbers.length}件 (累計: ${orderSet.size})`);
+        if (numbers.length > 0) {
+          const hFrom = String(chunkStart.getHours()).padStart(2, '0');
+          const hTo = String(chunkEnd.getHours()).padStart(2, '0');
+          console.log(`  [${chunkIndex}] ${this._formatDate(chunkStart)} ${hFrom}:00-${hTo}:59: ${numbers.length}件 (累計: ${orderSet.size})`);
+        }
 
-        chunkStart.setDate(chunkStart.getDate() + CHUNK_DAYS);
+        chunkStart.setHours(chunkStart.getHours() + CHUNK_HOURS);
         await new Promise(r => setTimeout(r, 50));
       }
 

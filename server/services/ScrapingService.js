@@ -131,6 +131,11 @@ class ScrapingService {
     runLog('============================================================');
 
     try {
+      // Yahoo!フリマの自動停止フラグをリセット（前回スキャンの状態を引き継がない）
+      if (this.scrapers.yahoo_flea?.resetAbortState) {
+        this.scrapers.yahoo_flea.resetAbortState();
+      }
+
       await this._cleanupOldProducts();
 
       const keywords = await Keyword.findAll();
