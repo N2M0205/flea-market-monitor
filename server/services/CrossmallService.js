@@ -151,7 +151,8 @@ class CrossmallService {
     const hh = String(date.getHours()).padStart(2, '0');
     const mm = String(date.getMinutes()).padStart(2, '0');
     const ss = String(date.getSeconds()).padStart(2, '0');
-    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+    // CROSSMALL APIはYYYY/MM/DD HH:MM:SS形式
+    return `${y}/${m}/${d} ${hh}:${mm}:${ss}`;
   }
 
   /**
@@ -160,14 +161,14 @@ class CrossmallService {
    */
   async _fetchOrdersForRange(fromDate, toDate) {
     const result = await this.makeRequest('get_order', {
-      order_date_fr: this._formatDateTime(fromDate),
-      order_date_to: this._formatDateTime(toDate)
+      order_date_fr: this._formatDate(fromDate),
+      order_date_to: this._formatDate(toDate)
     });
 
-    if (!result) return { orderNumbers: [], orderMeta: new Map() };
+    if (!result) return { orderNumbers: [], orderMeta: new Map(), hitLimit: false };
 
     const resultSet = result.GetOrder?.ResultSet;
-    if (!resultSet || !resultSet.Result) return { orderNumbers: [], orderMeta: new Map() };
+    if (!resultSet || !resultSet.Result) return { orderNumbers: [], orderMeta: new Map(), hitLimit: false };
 
     const results = Array.isArray(resultSet.Result) ? resultSet.Result : [resultSet.Result];
     const orderNumbers = [];
@@ -182,7 +183,10 @@ class CrossmallService {
       });
     }
 
-    return { orderNumbers, orderMeta };
+    // 100件上限ヒット検知
+    const hitLimit = results.length >= 100;
+
+    return { orderNumbers, orderMeta, hitLimit };
   }
 
   /**
@@ -195,40 +199,39 @@ class CrossmallService {
       const now = new Date();
       const globalStart = new Date();
       globalStart.setDate(now.getDate() - days);
-      globalStart.setHours(0, 0, 0, 0);
 
-      const CHUNK_HOURS = 3;
       const orderSet = new Set();
       const orderMetaMap = new Map();
+      let limitHitDays = 0;
 
-      console.log(`🔍 注文番号取得: ${this._formatDate(globalStart)} ~ ${this._formatDate(now)} (${CHUNK_HOURS}時間単位分割)`);
+      console.log(`🔍 注文番号取得: ${this._formatDate(globalStart)} ~ ${this._formatDate(now)} (1日単位分割)`);
 
-      // 古い方から新しい方へ3時間ずつ取得
+      // 古い方から新しい方へ1日ずつ取得
       let chunkStart = new Date(globalStart);
       let chunkIndex = 0;
 
       while (chunkStart < now) {
-        const chunkEnd = new Date(chunkStart);
-        chunkEnd.setHours(chunkEnd.getHours() + CHUNK_HOURS - 1, 59, 59, 0);
-        if (chunkEnd > now) chunkEnd.setTime(now.getTime());
-
-        const { orderNumbers: numbers, orderMeta } = await this._fetchOrdersForRange(chunkStart, chunkEnd);
+        const { orderNumbers: numbers, orderMeta, hitLimit } = await this._fetchOrdersForRange(chunkStart, chunkStart);
         for (const n of numbers) orderSet.add(n);
         for (const [k, v] of orderMeta) orderMetaMap.set(k, v);
 
         chunkIndex++;
-        if (numbers.length > 0) {
-          const hFrom = String(chunkStart.getHours()).padStart(2, '0');
-          const hTo = String(chunkEnd.getHours()).padStart(2, '0');
-          console.log(`  [${chunkIndex}] ${this._formatDate(chunkStart)} ${hFrom}:00-${hTo}:59: ${numbers.length}件 (累計: ${orderSet.size})`);
+        if (hitLimit) {
+          limitHitDays++;
+          console.log(`  [${chunkIndex}] ${this._formatDate(chunkStart)}: ${numbers.length}件 ⚠️ 上限100件ヒット（取りこぼしあり） (累計: ${orderSet.size})`);
+        } else if (numbers.length > 0) {
+          console.log(`  [${chunkIndex}] ${this._formatDate(chunkStart)}: ${numbers.length}件 (累計: ${orderSet.size})`);
         }
 
-        chunkStart.setHours(chunkStart.getHours() + CHUNK_HOURS);
+        chunkStart.setDate(chunkStart.getDate() + 1);
         await new Promise(r => setTimeout(r, 50));
       }
 
       const orderNumbers = [...orderSet].sort();
       console.log(`✅ ${orderNumbers.length}件の注文を取得 (${chunkIndex}回のAPIコール)`);
+      if (limitHitDays > 0) {
+        console.warn(`⚠️ ${limitHitDays}日で100件上限ヒット（一部注文の取りこぼしあり）`);
+      }
       return { orderNumbers, orderMetaMap };
     } catch (error) {
       console.error('❌ 注文番号取得エラー:', error.message);

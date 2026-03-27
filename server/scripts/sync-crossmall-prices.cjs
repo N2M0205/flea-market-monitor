@@ -3,7 +3,7 @@
  *
  * 処理フロー:
  *   1. CrossmallSalesHistory から前回同期状態を読み込み
- *   2. 初回: 過去90日分を3時間単位で分割取得（1回ごとに1秒待機）
+ *   2. 初回: 過去90日分を1日単位で分割取得（1回ごとに1秒待機）
  *      2回目以降: 前回最新注文日からの差分のみ取得
  *   3. 新規注文のみ履歴に追加（既知の注文番号はスキップ）
  *   4. 蓄積データから sales7/sales28/lastSalePrice を算出
@@ -37,46 +37,41 @@ function formatDate(date) {
 }
 
 /**
- * 指定期間の注文番号を3時間単位で分割取得（1回ごとに1秒待機）
- * 1日8スロット: 0-3時, 3-6時, 6-9時, 9-12時, 12-15時, 15-18時, 18-21時, 21-24時
+ * 指定期間の注文番号を1日単位で分割取得（1回ごとに1秒待機）
+ * 100件/日上限ヒット時は警告ログを出力
  */
-const CHUNK_HOURS = 3;
-
 async function fetchOrderNumbersChunked(crossmall, fromDate, toDate) {
   const orderMetaMap = new Map();
-  // 開始日の0時からスタート
   const current = new Date(fromDate);
-  current.setHours(0, 0, 0, 0);
   let chunkIndex = 0;
+  let limitHitDays = 0;
 
-  console.log(`🔍 注文番号取得: ${formatDate(fromDate)} ~ ${formatDate(toDate)} (${CHUNK_HOURS}時間単位分割)`);
+  console.log(`🔍 注文番号取得: ${formatDate(fromDate)} ~ ${formatDate(toDate)} (1日単位分割)`);
 
   while (current <= toDate) {
-    const chunkEnd = new Date(current);
-    chunkEnd.setHours(chunkEnd.getHours() + CHUNK_HOURS - 1, 59, 59, 0);
-    // 終了日を超えないようにクランプ
-    const effectiveEnd = chunkEnd > toDate ? toDate : chunkEnd;
-
-    const { orderNumbers: nums, orderMeta } = await crossmall.fetchOrdersForRange(current, effectiveEnd);
+    const { orderNumbers: nums, orderMeta, hitLimit } = await crossmall.fetchOrdersForRange(current, current);
 
     for (const n of nums) {
       if (!orderMetaMap.has(n)) orderMetaMap.set(n, orderMeta.get(n));
     }
 
     chunkIndex++;
-    if (nums.length > 0) {
-      const hFrom = String(current.getHours()).padStart(2, '0');
-      const hTo = String(effectiveEnd.getHours()).padStart(2, '0');
-      console.log(`  [${chunkIndex}] ${formatDate(current)} ${hFrom}:00-${hTo}:59: ${nums.length}件 (累計: ${orderMetaMap.size})`);
+    if (hitLimit) {
+      limitHitDays++;
+      console.log(`  [${chunkIndex}] ${formatDate(current)}: ${nums.length}件 ⚠️ 上限100件ヒット（取りこぼしあり） (累計: ${orderMetaMap.size})`);
+    } else if (nums.length > 0) {
+      console.log(`  [${chunkIndex}] ${formatDate(current)}: ${nums.length}件 (累計: ${orderMetaMap.size})`);
     }
 
-    // 次の3時間スロットへ
-    current.setHours(current.getHours() + CHUNK_HOURS);
+    current.setDate(current.getDate() + 1);
     await sleep(FETCH_DELAY_MS);
   }
 
   const orderNumbers = [...orderMetaMap.keys()].sort();
   console.log(`✅ ${orderNumbers.length}件の注文を取得 (${chunkIndex}回のAPIコール)`);
+  if (limitHitDays > 0) {
+    console.warn(`⚠️ ${limitHitDays}日で100件上限ヒット（一部注文の取りこぼしあり）`);
+  }
   return { orderNumbers, orderMetaMap };
 }
 
@@ -110,7 +105,7 @@ async function main() {
     // 初回: 過去90日分
     fromDate = new Date(now);
     fromDate.setDate(now.getDate() - INITIAL_FETCH_DAYS);
-    console.log(`\n🔄 初回同期: 過去${INITIAL_FETCH_DAYS}日分を${CHUNK_HOURS}時間単位で分割取得`);
+    console.log(`\n🔄 初回同期: 過去${INITIAL_FETCH_DAYS}日分を1日単位で分割取得`);
   } else {
     // 差分取得: 最新注文日 - マージン
     fromDate = new Date(syncInfo.newestOrderDate);
