@@ -223,6 +223,9 @@ class LineNotificationService {
             stock: master.stock ?? null,
             price: master.lastSalePrice ?? null,
             sales28: master.sales28 ?? 0,
+            sales7: master.sales7 ?? 0,
+            lastSaleDate: master.lastSaleDate ?? null,
+            deliveryType: master.deliveryType ?? null,
             item_name: null,
           };
         }
