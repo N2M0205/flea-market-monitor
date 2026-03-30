@@ -7,11 +7,12 @@ puppeteerExtra.use(StealthPlugin());
 // ──────────────────────────────────────────────────────────────────
 
 const path = require('path');
+const os   = require('os');
+const fs   = require('fs');
 const { execSync } = require('child_process');
 
 class MercariPuppeteerScraper {
   constructor() {
-    this.browser = null;
     this.baseUrl = 'https://jp.mercari.com';
     this.userAgents = [
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -34,22 +35,13 @@ class MercariPuppeteerScraper {
     await this._sleep(1000);
   }
 
-  async initialize() {
-    // 前回のブラウザが死んでいたら参照をクリア
-    if (this.browser) {
-      try {
-        if (!this.browser.isConnected()) {
-          console.log('⚠️ Mercari: 前回のブラウザが切断済み。再起動します');
-          this.browser = null;
-        }
-      } catch (_) {
-        this.browser = null;
-      }
-    }
-    if (this.browser) return;
-    await this._killZombieChrome();
-
-    this.browser = await puppeteerExtra.launch({
+  async _launchBrowser() {
+    const userDataDir = path.join(
+      os.tmpdir(),
+      `puppeteer_mercari_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    );
+    const browser = await puppeteerExtra.launch({
+      userDataDir,
       headless: 'new',
       args: [
         '--no-sandbox',
@@ -62,7 +54,7 @@ class MercariPuppeteerScraper {
       ],
       defaultViewport: { width: 1366, height: 768 },
     });
-    console.log('✅ Puppeteer (Stealth) 起動完了');
+    return { browser, userDataDir };
   }
 
   async _setupPage(page) {
@@ -88,10 +80,12 @@ class MercariPuppeteerScraper {
     const { minPrice = null, maxPrice = null, limit = 20 } = options;
     const results = [];
 
+    let browser = null;
+    let userDataDir = null;
     let page = null;
     try {
-      await this.initialize();
-      page = await this.browser.newPage();
+      ({ browser, userDataDir } = await this._launchBrowser());
+      page = await browser.newPage();
       await this._setupPage(page);
 
       // URL構築
@@ -252,6 +246,8 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       return [];
     } finally {
       if (page) await page.close().catch(() => {});
+      if (browser) await browser.close().catch(() => {});
+      if (userDataDir) try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
     }
   }
 
@@ -283,10 +279,12 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
   }
 
   async getProductDetail(url) {
+    let browser = null;
+    let userDataDir = null;
     let page = null;
     try {
-      await this.initialize();
-      page = await this.browser.newPage();
+      ({ browser, userDataDir } = await this._launchBrowser());
+      page = await browser.newPage();
       await this._setupPage(page);
       await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
       await this._sleep(2000);
@@ -307,15 +305,14 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       return null;
     } finally {
       if (page) await page.close().catch(() => {});
+      if (browser) await browser.close().catch(() => {});
+      if (userDataDir) try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
     }
   }
 
+  // cleanup() は後方互換のため残置（ScrapingServiceのfinally節から呼ばれる）
   async cleanup() {
-    if (this.browser) {
-      await this.browser.close().catch(() => {});
-      this.browser = null;
-      console.log('✅ Puppeteer ブラウザ終了');
-    }
+    // browser/pageはsearch()ごとにfinallyで閉じるため、ここでは何もしない
   }
 }
 
