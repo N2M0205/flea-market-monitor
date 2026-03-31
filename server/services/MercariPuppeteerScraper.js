@@ -91,7 +91,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       console.log(`🔍 Mercari検索: ${keyword} → ${searchUrl}`);
 
       // ── ページ遷移 ────────────────────────────────────────────
-      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
       await this._sleep(2000 + Math.random() * 2000); // 2〜4秒ランダム待機
 
       // ── デバッグ用スクリーンショット & HTMLダンプ ──────────────
@@ -276,7 +276,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       browser = await this._launchBrowser();
       page = await browser.newPage();
       await this._setupPage(page);
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
       await this._sleep(2000);
 
       const detail = await page.evaluate(() => {
