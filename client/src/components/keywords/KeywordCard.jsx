@@ -113,6 +113,18 @@ export default function KeywordCard({ keyword, onEdit, onDelete }) {
           ))}
         </Box>
 
+        {/* 除外キーワード */}
+        {(keyword.exclude_keywords || keyword.global_exclude_enabled !== false) && (
+          <Box sx={{ mb: 2 }}>
+            {keyword.global_exclude_enabled !== false && (
+              <Chip label="全体除外ON" size="small" color="info" variant="outlined" sx={{ mr: 0.5, mb: 0.5 }} />
+            )}
+            {keyword.exclude_keywords && keyword.exclude_keywords.split(',').filter(Boolean).map((word, i) => (
+              <Chip key={i} label={word.trim()} size="small" color="warning" sx={{ mr: 0.5, mb: 0.5 }} />
+            ))}
+          </Box>
+        )}
+
         {/* ステータス */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {keyword.is_active ? (

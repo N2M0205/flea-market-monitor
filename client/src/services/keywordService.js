@@ -95,6 +95,36 @@ const keywordService = {
    * @param {string|number} id
    * @param {boolean} is_active
    */
+  async getGlobalExcludes() {
+    try {
+      const response = await api.get('/keywords/global-excludes');
+      return response.data;
+    } catch (error) {
+      console.error('❌ 全体除外キーワード取得エラー:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  async updateExcludeKeywords(id, excludeKeywords) {
+    try {
+      const response = await api.put(`/keywords/${id}/exclude-keywords`, { exclude_keywords: excludeKeywords });
+      return response.data;
+    } catch (error) {
+      console.error('❌ 除外キーワード更新エラー:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  async updateGlobalExcludeEnabled(id, enabled) {
+    try {
+      const response = await api.put(`/keywords/${id}/global-exclude-enabled`, { enabled });
+      return response.data;
+    } catch (error) {
+      console.error('❌ 全体除外設定更新エラー:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
   async toggleActive(id, is_active) {
     try {
       console.log('🔍 キーワード状態切替:', id, is_active);

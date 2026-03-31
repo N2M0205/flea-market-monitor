@@ -22,7 +22,10 @@ import {
   FormGroup,
   FormLabel,
   Grid,
-  Alert
+  Alert,
+  Chip,
+  Switch,
+  Typography
 } from '@mui/material';
 
 const platformOptions = [
@@ -39,8 +42,11 @@ export default function KeywordForm({ open, onClose, onSubmit, initialData }) {
     max_price: 10000,
     crossmall_item_code: '',
     platforms: ['mercari', 'yahoo_flea'],
-    is_active: true
+    is_active: true,
+    exclude_keywords: '',
+    global_exclude_enabled: true
   });
+  const [excludeInput, setExcludeInput] = useState('');
   const [error, setError] = useState('');
 
   /**
@@ -56,19 +62,23 @@ export default function KeywordForm({ open, onClose, onSubmit, initialData }) {
         platforms: typeof initialData.platforms === 'string'
           ? JSON.parse(initialData.platforms)
           : initialData.platforms || ['mercari', 'yahoo_flea'],
-        is_active: initialData.is_active !== false
+        is_active: initialData.is_active !== false,
+        exclude_keywords: initialData.exclude_keywords || '',
+        global_exclude_enabled: initialData.global_exclude_enabled !== false
       });
     } else {
-      // 新規作成時はデフォルト値
       setFormData({
         keyword: '',
         min_price: 1000,
         max_price: 10000,
         crossmall_item_code: '',
         platforms: ['mercari', 'yahoo_flea'],
-        is_active: true
+        is_active: true,
+        exclude_keywords: '',
+        global_exclude_enabled: true
       });
     }
+    setExcludeInput('');
     setError('');
   }, [initialData, open]);
 
@@ -200,6 +210,80 @@ export default function KeywordForm({ open, onClose, onSubmit, initialData }) {
             ))}
           </FormGroup>
         </Box>
+
+        {/* 除外キーワード */}
+        <Box sx={{ mt: 3 }}>
+          <FormLabel component="legend">除外キーワード（個別）</FormLabel>
+          <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+            <TextField
+              size="small"
+              placeholder="除外ワードを入力"
+              value={excludeInput}
+              onChange={(e) => setExcludeInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && excludeInput.trim()) {
+                  e.preventDefault();
+                  const current = formData.exclude_keywords
+                    ? formData.exclude_keywords.split(',').map(w => w.trim()).filter(Boolean)
+                    : [];
+                  if (!current.includes(excludeInput.trim())) {
+                    current.push(excludeInput.trim());
+                    setFormData({ ...formData, exclude_keywords: current.join(',') });
+                  }
+                  setExcludeInput('');
+                }
+              }}
+              sx={{ flex: 1 }}
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                if (!excludeInput.trim()) return;
+                const current = formData.exclude_keywords
+                  ? formData.exclude_keywords.split(',').map(w => w.trim()).filter(Boolean)
+                  : [];
+                if (!current.includes(excludeInput.trim())) {
+                  current.push(excludeInput.trim());
+                  setFormData({ ...formData, exclude_keywords: current.join(',') });
+                }
+                setExcludeInput('');
+              }}
+            >
+              追加
+            </Button>
+          </Box>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+            {(formData.exclude_keywords || '').split(',').filter(Boolean).map((word, i) => (
+              <Chip
+                key={i}
+                label={word.trim()}
+                size="small"
+                onDelete={() => {
+                  const current = formData.exclude_keywords.split(',').map(w => w.trim()).filter(Boolean);
+                  current.splice(i, 1);
+                  setFormData({ ...formData, exclude_keywords: current.join(',') });
+                }}
+                color="warning"
+              />
+            ))}
+          </Box>
+        </Box>
+
+        {/* 全体除外キーワード有効/無効 */}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={formData.global_exclude_enabled}
+              onChange={(e) => setFormData({ ...formData, global_exclude_enabled: e.target.checked })}
+            />
+          }
+          label="全体除外キーワードを適用"
+          sx={{ mt: 2, display: 'block' }}
+        />
+        <Typography variant="caption" color="text.secondary">
+          まとめ、セット、ジャンク、サンプル 等をフィルタします
+        </Typography>
 
         {/* 有効/無効 */}
         <FormControlLabel
