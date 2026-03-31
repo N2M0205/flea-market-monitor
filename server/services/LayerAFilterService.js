@@ -110,11 +110,22 @@ function layerAFilter(product, keyword, config) {
 // 除外キーワードチェック
 // ─────────────────────────────────────────────
 
-const globalExcludes = require('../config/globalExcludeKeywords');
+const GLOBAL_EXCLUDE_JSON = path.resolve(__dirname, '../../data/global_exclude_keywords.json');
+const globalExcludeFallback = require('../config/globalExcludeKeywords');
+
+function loadGlobalExcludes() {
+  try {
+    if (fs.existsSync(GLOBAL_EXCLUDE_JSON)) {
+      return JSON.parse(fs.readFileSync(GLOBAL_EXCLUDE_JSON, 'utf-8'));
+    }
+  } catch (_) {}
+  return globalExcludeFallback;
+}
 
 function isExcluded(title, keyword) {
   // 全体除外（keyword.global_exclude_enabled が false でなければ適用）
   if (keyword.global_exclude_enabled !== false) {
+    const globalExcludes = loadGlobalExcludes();
     for (const word of globalExcludes) {
       if (title.includes(word)) return { excluded: true, reason: `全体除外: ${word}` };
     }

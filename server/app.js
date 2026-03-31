@@ -40,6 +40,10 @@ app.use('/api/line',     lineRouter);
 // ★ 追加2: sync ルート登録
 app.use('/api/sync', syncRouter);
 
+// 設定ルート登録
+const settingsRouter = require('./routes/settings');
+app.use('/api/settings', settingsRouter);
+
 // ★ 追加3: 起動時に Layer A 設定をDBへシード（Settings テーブルが存在する前提）
 const { seedLayerASettings } = require('./services/LayerAFilterService');
 seedLayerASettings().catch(err => console.warn('seedLayerASettings:', err.message));

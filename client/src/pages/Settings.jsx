@@ -17,7 +17,8 @@ import {
   Save as SaveIcon,
   Link as LinkIcon,
   CheckCircle as CheckCircleIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Block as BlockIcon
 } from '@mui/icons-material';
 
 import Layout from '../components/layout/Layout';
@@ -35,6 +36,8 @@ export default function Settings() {
 
   const [linkCode, setLinkCode] = useState('');
   const [devLinkCode, setDevLinkCode] = useState('');
+  const [globalExcludes, setGlobalExcludes] = useState([]);
+  const [excludeInput, setExcludeInput] = useState('');
 
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -42,6 +45,7 @@ export default function Settings() {
 
   useEffect(() => {
     loadSettings();
+    loadGlobalExcludes();
   }, []);
 
   const loadSettings = async () => {
@@ -53,6 +57,37 @@ export default function Settings() {
     } catch (e) {
       console.error('設定取得エラー', e);
     }
+  };
+
+  const loadGlobalExcludes = async () => {
+    try {
+      const res = await api.get('/settings/global-excludes');
+      if (res.data.success) setGlobalExcludes(res.data.data);
+    } catch (e) {
+      console.error('全体除外キーワード取得エラー', e);
+    }
+  };
+
+  const saveGlobalExcludes = async (newList) => {
+    try {
+      setGlobalExcludes(newList);
+      await api.post('/settings/global-excludes', newList);
+    } catch (e) {
+      setError('全体除外キーワードの保存に失敗しました');
+      loadGlobalExcludes();
+    }
+  };
+
+  const handleAddExclude = () => {
+    const word = excludeInput.trim();
+    if (!word || globalExcludes.includes(word)) return;
+    saveGlobalExcludes([...globalExcludes, word]);
+    setExcludeInput('');
+  };
+
+  const handleRemoveExclude = (index) => {
+    const newList = globalExcludes.filter((_, i) => i !== index);
+    saveGlobalExcludes(newList);
   };
 
   const handleSaveCrossmall = async () => {
@@ -280,6 +315,55 @@ export default function Settings() {
               </Grid>
             </>
           )}
+        </Paper>
+        {/* 全体除外キーワード */}
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h6">🚫 全体除外キーワード</Typography>
+          <Divider sx={{ my: 2 }} />
+
+          <Alert severity="info" sx={{ mb: 2 }}>
+            ここに設定したワードがタイトルに含まれる商品は、全キーワードで自動除外されます
+          </Alert>
+
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
+            {globalExcludes.map((word, i) => (
+              <Chip
+                key={i}
+                label={word}
+                onDelete={() => handleRemoveExclude(i)}
+                color="warning"
+              />
+            ))}
+            {globalExcludes.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                除外キーワードが設定されていません
+              </Typography>
+            )}
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextField
+              size="small"
+              placeholder="除外ワードを入力"
+              value={excludeInput}
+              onChange={(e) => setExcludeInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddExclude();
+                }
+              }}
+              sx={{ flex: 1 }}
+            />
+            <Button
+              variant="outlined"
+              startIcon={<BlockIcon />}
+              onClick={handleAddExclude}
+              disabled={!excludeInput.trim()}
+            >
+              追加
+            </Button>
+          </Box>
         </Paper>
       </Container>
     </Layout>
