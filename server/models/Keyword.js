@@ -48,6 +48,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       comment: '除外キーワード（カンマ区切り）'
     },
+    global_exclude_enabled: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      comment: '全体除外キーワード有効フラグ'
+    },
     platforms: {
       type: DataTypes.JSON,
       defaultValue: {

@@ -189,6 +189,54 @@ class KeywordController {
       });
     }
   }
+  /**
+   * 全体除外キーワード一覧取得
+   */
+  async getGlobalExcludes(req, res) {
+    try {
+      const globalExcludes = require('../config/globalExcludeKeywords');
+      res.json({ success: true, data: globalExcludes });
+    } catch (error) {
+      console.error('❌ 全体除外キーワード取得エラー:', error);
+      res.status(500).json({ success: false, message: '取得に失敗しました' });
+    }
+  }
+
+  /**
+   * キーワード個別除外キーワード更新
+   */
+  async updateExcludeKeywords(req, res) {
+    try {
+      const keyword = await Keyword.findByPk(req.params.id);
+      if (!keyword) {
+        return res.status(404).json({ success: false, message: 'キーワードが見つかりません' });
+      }
+      keyword.exclude_keywords = req.body.exclude_keywords || '';
+      await keyword.save();
+      res.json({ success: true, data: keyword });
+    } catch (error) {
+      console.error('❌ 除外キーワード更新エラー:', error);
+      res.status(500).json({ success: false, message: '更新に失敗しました' });
+    }
+  }
+
+  /**
+   * 全体除外キーワード有効/無効切替
+   */
+  async updateGlobalExcludeEnabled(req, res) {
+    try {
+      const keyword = await Keyword.findByPk(req.params.id);
+      if (!keyword) {
+        return res.status(404).json({ success: false, message: 'キーワードが見つかりません' });
+      }
+      keyword.global_exclude_enabled = req.body.enabled !== false;
+      await keyword.save();
+      res.json({ success: true, data: keyword });
+    } catch (error) {
+      console.error('❌ 全体除外設定更新エラー:', error);
+      res.status(500).json({ success: false, message: '更新に失敗しました' });
+    }
+  }
 }
 
 module.exports = new KeywordController();

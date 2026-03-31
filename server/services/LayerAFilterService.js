@@ -95,8 +95,41 @@ function layerAFilter(product, keyword, config) {
     return { pass: false, reason: `NG語句検出: "${ngWord}"`, expiryMonths, hoursOld: hoursOld || 0 };
   }
 
+  // ─── 条件6: 除外キーワード ───
+  const excludeResult = isExcluded(title, keyword);
+  if (excludeResult.excluded) {
+    console.log(`  🚫 除外: ${title} [${excludeResult.reason}]`);
+    return { pass: false, reason: excludeResult.reason, expiryMonths, hoursOld: hoursOld || 0 };
+  }
+
   // ─── 全通過 ───
   return { pass: true, reason: 'OK', expiryMonths, hoursOld: hoursOld || 0 };
+}
+
+// ─────────────────────────────────────────────
+// 除外キーワードチェック
+// ─────────────────────────────────────────────
+
+const globalExcludes = require('../config/globalExcludeKeywords');
+
+function isExcluded(title, keyword) {
+  // 全体除外（keyword.global_exclude_enabled が false でなければ適用）
+  if (keyword.global_exclude_enabled !== false) {
+    for (const word of globalExcludes) {
+      if (title.includes(word)) return { excluded: true, reason: `全体除外: ${word}` };
+    }
+  }
+
+  // キーワード個別除外
+  if (keyword.exclude_keywords) {
+    const raw = typeof keyword.exclude_keywords === 'string' ? keyword.exclude_keywords : '';
+    const perKeywords = raw.split(',').map(w => w.trim()).filter(Boolean);
+    for (const word of perKeywords) {
+      if (title.includes(word)) return { excluded: true, reason: `個別除外: ${word}` };
+    }
+  }
+
+  return { excluded: false };
 }
 
 // ─────────────────────────────────────────────
