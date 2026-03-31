@@ -7,8 +7,6 @@ puppeteerExtra.use(StealthPlugin());
 // ──────────────────────────────────────────────────────────────────
 
 const path = require('path');
-const os   = require('os');
-const fs   = require('fs');
 const { execSync } = require('child_process');
 
 class MercariPuppeteerScraper {
@@ -36,12 +34,7 @@ class MercariPuppeteerScraper {
   }
 
   async _launchBrowser() {
-    const userDataDir = path.join(
-      os.tmpdir(),
-      `puppeteer_mercari_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    );
     const browser = await puppeteerExtra.launch({
-      userDataDir,
       headless: 'new',
       args: [
         '--no-sandbox',
@@ -54,7 +47,7 @@ class MercariPuppeteerScraper {
       ],
       defaultViewport: { width: 1366, height: 768 },
     });
-    return { browser, userDataDir };
+    return browser;
   }
 
   async _setupPage(page) {
@@ -81,10 +74,9 @@ class MercariPuppeteerScraper {
     const results = [];
 
     let browser = null;
-    let userDataDir = null;
     let page = null;
     try {
-      ({ browser, userDataDir } = await this._launchBrowser());
+      browser = await this._launchBrowser();
       page = await browser.newPage();
       await this._setupPage(page);
 
@@ -247,7 +239,6 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
     } finally {
       if (page) await page.close().catch(() => {});
       if (browser) await browser.close().catch(() => {});
-      if (userDataDir) try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
     }
   }
 
@@ -280,10 +271,9 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
 
   async getProductDetail(url) {
     let browser = null;
-    let userDataDir = null;
     let page = null;
     try {
-      ({ browser, userDataDir } = await this._launchBrowser());
+      browser = await this._launchBrowser();
       page = await browser.newPage();
       await this._setupPage(page);
       await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
@@ -306,7 +296,6 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
     } finally {
       if (page) await page.close().catch(() => {});
       if (browser) await browser.close().catch(() => {});
-      if (userDataDir) try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch {}
     }
   }
 
