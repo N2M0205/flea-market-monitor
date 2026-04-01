@@ -112,8 +112,13 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       console.log(`🔍 Mercari検索: ${keyword} → ${searchUrl}`);
 
       // ── ページ遷移 ────────────────────────────────────────────
-      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 60000 });
       await this._sleep(2000 + Math.random() * 2000); // 2〜4秒ランダム待機
+
+      // ── networkidle2後の描画待機（item-cellが出現するまで最大10秒）──
+      await page.waitForSelector('[data-testid="item-cell"]', { timeout: 10000 }).catch(() => {
+        console.warn('⚠️ item-cell 出現待機タイムアウト（10秒）');
+      });
 
       // ── デバッグ用スクリーンショット & HTMLダンプ ──────────────
       const ssPath = path.join(__dirname, '..', 'debug-mercari-page.png');
@@ -126,8 +131,8 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       // ── 要素数デバッグ ──────────────────────────────────────────
       const counts = await page.evaluate(() => ({
         itemCell:       document.querySelectorAll('[data-testid="item-cell"]').length,
-        merThumbnail:   document.querySelectorAll('mer-item-thumbnail').length,
-        linkToItem:     document.querySelectorAll('a[href*="/item/m"]').length,
+        merThumbnail:   document.querySelectorAll('.merItemThumbnail').length,
+        linkToItem:     document.querySelectorAll('a[href*="/item/"]').length,
         listContainer:  document.querySelectorAll('ul, ol').length,
       })).catch(() => ({}));
       console.log('🔢 要素カウント:', JSON.stringify(counts));
@@ -150,8 +155,8 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       await page.waitForFunction(() => {
         const cells = document.querySelectorAll('[data-testid="item-cell"]');
         if (!cells.length) {
-          // フォールバック：a[href*="/item/m"] が存在するか
-          return document.querySelectorAll('a[href*="/item/m"]').length > 0;
+          // フォールバック：a[href*="/item/"] が存在するか
+          return document.querySelectorAll('a[href*="/item/"]').length > 0;
         }
         const first = cells[0];
         const hasImg  = !!(first.querySelector('img[src]')?.src?.startsWith('http'));
@@ -165,15 +170,15 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       let items = await page.$$('[data-testid="item-cell"]').catch(() => []);
       console.log(`🔍 パターン1 [item-cell]: ${items.length}件`);
 
-      // ── パターン2: mer-item-thumbnail ───────────────────────────
+      // ── パターン2: .merItemThumbnail (CSSクラス) ──────────────────
       if (!items.length) {
-        items = await page.$$('mer-item-thumbnail').catch(() => []);
-        console.log(`🔍 パターン2 [mer-item-thumbnail]: ${items.length}件`);
+        items = await page.$$('.merItemThumbnail').catch(() => []);
+        console.log(`🔍 パターン2 [.merItemThumbnail]: ${items.length}件`);
       }
 
-      // ── パターン3: a[href*="/item/m"] ───────────────────────────
+      // ── パターン3: a[href*="/item/"] ───────────────────────────
       if (!items.length) {
-        const links = await page.$$eval('a[href*="/item/m"]', els =>
+        const links = await page.$$eval('a[href*="/item/"]', els =>
           [...new Map(els.map(e => [e.href, e])).values()].slice(0, 40).map(el => {
             let title = el.querySelector('img')?.alt || el.textContent?.trim() || '';
             title = title.replace(/のサムネイル$/, '').trim();
@@ -185,7 +190,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
             };
           })
         ).catch(() => []);
-        console.log(`🔍 パターン3 [a[href*="/item/m"]]: ${links.length}件`);
+        console.log(`🔍 パターン3 [a[href*="/item/"]]: ${links.length}件`);
         if (links.length) {
           return links.slice(0, limit).map(l => ({
             product_id: l.url.split('/item/')[1]?.split('?')[0] || '',
