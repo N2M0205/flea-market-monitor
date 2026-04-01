@@ -53,7 +53,7 @@ class YahooFleaScraper {
   async _launchBrowser() {
     const browser = await puppeteerExtra.launch({
       headless: 'new',
-      protocolTimeout: 30000,
+      protocolTimeout: 90000,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
