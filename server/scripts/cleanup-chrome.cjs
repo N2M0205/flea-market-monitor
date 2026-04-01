@@ -10,9 +10,13 @@
  */
 
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5分（孤立プロセス判定）
 const LEAK_THRESHOLD_MS  = 3 * 60 * 1000; // 3分（backend子プロセスのリーク判定）
+const TMP_AGE_THRESHOLD_MS = 60 * 60 * 1000; // 1時間（Tempファイル削除判定）
 
 function getPm2BackendPid() {
   try {
@@ -163,8 +167,140 @@ function main() {
   console.log(`[chrome-cleanup] (スキップ: ${skipped}件, 終了: ${killed}件)`);
 }
 
+// --- Temp掃除 ---
+
+function getDirSize(dirPath) {
+  let size = 0;
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          size += getDirSize(fullPath);
+        } else {
+          size += fs.statSync(fullPath).size;
+        }
+      } catch {
+        // アクセス不可のファイルはスキップ
+      }
+    }
+  } catch {
+    // ディレクトリ読み取り不可
+  }
+  return size;
+}
+
+function getEntrySize(fullPath, isDir) {
+  try {
+    if (isDir) return getDirSize(fullPath);
+    return fs.statSync(fullPath).size;
+  } catch {
+    return 0;
+  }
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function shouldDelete(entry, now) {
+  const name = entry.name;
+  const isDir = entry.isDirectory();
+
+  // Puppeteer一時プロファイル → 即削除
+  if (isDir && name.startsWith('puppeteer_dev_chrome_profile-')) return true;
+
+  // Chromium/Chrome一時フォルダ → 即削除
+  if (isDir && (name.startsWith('chromium_') || name.startsWith('chrome_'))) return true;
+
+  // .tmpファイル（1時間以上経過）
+  if (!isDir && name.endsWith('.tmp')) {
+    try {
+      const stat = fs.statSync(path.join(os.tmpdir(), name));
+      if (now - stat.birthtimeMs >= TMP_AGE_THRESHOLD_MS) return true;
+    } catch { /* skip */ }
+  }
+
+  // tmpで始まるフォルダ（1時間以上経過）
+  if (isDir && name.startsWith('tmp')) {
+    try {
+      const stat = fs.statSync(path.join(os.tmpdir(), name));
+      if (now - stat.birthtimeMs >= TMP_AGE_THRESHOLD_MS) return true;
+    } catch { /* skip */ }
+  }
+
+  return false;
+}
+
+function cleanupTemp() {
+  console.log(`[temp-cleanup] 実行開始: ${new Date().toISOString()}`);
+
+  const tempDir = os.tmpdir();
+  let entries;
+  try {
+    entries = fs.readdirSync(tempDir, { withFileTypes: true });
+  } catch (err) {
+    console.error(`[temp-cleanup] TEMPディレクトリ読み取りエラー: ${err.message}`);
+    return;
+  }
+
+  const now = Date.now();
+  const targets = [];
+
+  for (const entry of entries) {
+    if (shouldDelete(entry, now)) {
+      targets.push(entry);
+    }
+  }
+
+  if (targets.length === 0) {
+    console.log('[temp-cleanup] 削除対象なし');
+    return;
+  }
+
+  // 削除前サイズ計算
+  let totalSize = 0;
+  for (const entry of targets) {
+    totalSize += getEntrySize(path.join(tempDir, entry.name), entry.isDirectory());
+  }
+  console.log(`[temp-cleanup] 削除対象: ${targets.length}件, 合計サイズ: ${formatBytes(totalSize)}`);
+
+  let deleted = 0;
+  let failed = 0;
+  let freedBytes = 0;
+
+  for (const entry of targets) {
+    const fullPath = path.join(tempDir, entry.name);
+    const entrySize = getEntrySize(fullPath, entry.isDirectory());
+    try {
+      fs.rmSync(fullPath, { recursive: true, force: true });
+      deleted++;
+      freedBytes += entrySize;
+    } catch (err) {
+      if (err.code === 'EBUSY' || err.code === 'EPERM') {
+        // 使用中 → スキップ
+      } else {
+        console.warn(`[temp-cleanup] 削除失敗: ${entry.name} (${err.code || err.message})`);
+      }
+      failed++;
+    }
+  }
+
+  console.log(`[temp-cleanup] 完了: 削除${deleted}件, 失敗${failed}件, 解放サイズ: ${formatBytes(freedBytes)}`);
+}
+
 try {
   main();
 } catch (err) {
   console.error(`[chrome-cleanup] エラー: ${err.message}`);
+}
+
+try {
+  cleanupTemp();
+} catch (err) {
+  console.error(`[temp-cleanup] エラー: ${err.message}`);
 }
