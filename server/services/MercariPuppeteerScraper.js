@@ -8,6 +8,7 @@ puppeteerExtra.use(StealthPlugin());
 
 const path = require('path');
 const { execSync } = require('child_process');
+const browserPool = require('./BrowserPool.cjs');
 
 class MercariPuppeteerScraper {
   constructor() {
@@ -96,7 +97,10 @@ class MercariPuppeteerScraper {
 
     let browser = null;
     let page = null;
+    let poolAcquired = false;
     try {
+      await browserPool.acquire();
+      poolAcquired = true;
       browser = await this._launchBrowser();
       page = await browser.newPage();
       await this._setupPage(page);
@@ -272,6 +276,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
           this._forceCloseBrowser(browser);
         }
       }
+      if (poolAcquired) browserPool.release();
     }
   }
 
@@ -305,7 +310,10 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
   async getProductDetail(url) {
     let browser = null;
     let page = null;
+    let poolAcquired = false;
     try {
+      await browserPool.acquire();
+      poolAcquired = true;
       browser = await this._launchBrowser();
       page = await browser.newPage();
       await this._setupPage(page);
@@ -336,6 +344,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
           this._forceCloseBrowser(browser);
         }
       }
+      if (poolAcquired) browserPool.release();
     }
   }
 

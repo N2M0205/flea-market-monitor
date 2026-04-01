@@ -21,6 +21,7 @@
 const puppeteerExtra = require('puppeteer-extra');
 const StealthPlugin  = require('puppeteer-extra-plugin-stealth');
 puppeteerExtra.use(StealthPlugin());
+const browserPool = require('./BrowserPool.cjs');
 
 class YahooFleaScraper {
   constructor() {
@@ -123,7 +124,10 @@ class YahooFleaScraper {
     const { min_price, max_price, limit = 20 } = options;
 
     let browser = null;
+    let poolAcquired = false;
     try {
+      await browserPool.acquire();
+      poolAcquired = true;
       browser = await this._launchBrowser();
       const page = await browser.newPage();
       await this._setupPage(page);
@@ -346,6 +350,7 @@ class YahooFleaScraper {
           this._forceCloseBrowser(browser);
         }
       }
+      if (poolAcquired) browserPool.release();
     }
   }
 
@@ -354,7 +359,10 @@ class YahooFleaScraper {
   // ─────────────────────────────────────────────
   async getProductDetail(productId) {
     let browser = null;
+    let poolAcquired = false;
     try {
+      await browserPool.acquire();
+      poolAcquired = true;
       browser = await this._launchBrowser();
       const page = await browser.newPage();
       await this._setupPage(page);
@@ -383,6 +391,7 @@ class YahooFleaScraper {
           this._forceCloseBrowser(browser);
         }
       }
+      if (poolAcquired) browserPool.release();
     }
   }
 
