@@ -115,14 +115,18 @@ params.set('status', 'on_sale');      // 販売中のみ ← 追加
 const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       console.log(`🔍 Mercari検索: ${keyword} → ${searchUrl}`);
 
-      // ── ページ遷移 ────────────────────────────────────────────
-      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-      await this._sleep(2000 + Math.random() * 2000); // 2〜4秒ランダム待機
+      // ── ページ遷移（高速） ────────────────────────────────────
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-      // ── networkidle2後の描画待機（item-cellが出現するまで最大10秒）──
-      await page.waitForSelector('[data-testid="item-cell"]', { timeout: 10000 }).catch(() => {
-        console.warn('⚠️ item-cell 出現待機タイムアウト（10秒）');
-      });
+      // ── 商品要素の出現を待つ（SPAの描画完了を待機） ──────────
+      try {
+        await page.waitForSelector('[data-testid="item-cell"]', { timeout: 20000 });
+      } catch (e) {
+        console.log('⚠️ item-cell 出現待機タイムアウト（20秒）— 商品0件の可能性');
+      }
+
+      // ── 追加の安定待機（描画バッファ） ─────────────────────────
+      await this._sleep(2000 + Math.random() * 2000);
 
       // ── デバッグ用スクリーンショット & HTMLダンプ ──────────────
       const ssPath = path.join(__dirname, '..', 'debug-mercari-page.png');
