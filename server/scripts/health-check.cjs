@@ -10,6 +10,7 @@
  *   - Chrome プロセス数 (10個超)
  *   - PM2 picofuri-backend の status (online以外)
  *   - picofuri-backend 再起動回数 (30分間で5回以上)
+ *   - スクレイピング成功率 (Mercari 50%/25%, Yahoo 80%, 処理時間600秒)
  *
  * 異常時のみ LINE broadcast で全友達に警告送信
  *
@@ -265,6 +266,151 @@ function checkRestartRate(currentRestarts) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// スクレイピング監視
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const PM2_OUT_LOG = path.join(process.env.USERPROFILE || 'C:\\Users\\Administrator', '.pm2', 'logs', 'picofuri-backend-out.log');
+const PM2_ERR_LOG = path.join(process.env.USERPROFILE || 'C:\\Users\\Administrator', '.pm2', 'logs', 'picofuri-backend-error.log');
+
+function readTailLines(filePath, maxLines) {
+  try {
+    const buf = fs.readFileSync(filePath, 'utf8');
+    const lines = buf.split('\n');
+    return lines.slice(-maxLines);
+  } catch {
+    return null;
+  }
+}
+
+function checkScrapeStatus() {
+  try {
+    const outLines = readTailLines(PM2_OUT_LOG, 10000);
+    if (!outLines) {
+      return [{ ok: true, message: '📊 直近スキャン: データ取得不可（スキップ）' }];
+    }
+
+    // 末尾から最新の完了したスキャンを探す
+    let scanEndIdx = -1;
+    let scanStartIdx = -1;
+    for (let i = outLines.length - 1; i >= 0; i--) {
+      if (scanEndIdx === -1 && outLines[i].includes('全キーワードのスクレイピング完了')) {
+        scanEndIdx = i;
+      }
+      if (scanEndIdx !== -1 && outLines[i].includes('定期スクレイピング開始')) {
+        scanStartIdx = i;
+        break;
+      }
+    }
+
+    if (scanStartIdx === -1 || scanEndIdx === -1) {
+      return [{ ok: true, message: '📊 直近スキャン: データ取得不可（スキップ）' }];
+    }
+
+    const scanLines = outLines.slice(scanStartIdx, scanEndIdx + 1);
+
+    // エラーログも末尾10000行読んでタイムスタンプで絞り込む
+    // → スキャン区間内のエラーは out.log の行番号範囲に対応しないので
+    //   err.log 全体から mercari / yahoo_flea エラーをカウント
+    //   ただしスキャン開始〜終了の時刻で絞れないため、outログ内のエラーパターンも使う
+
+    // 処理時間
+    const timeMatch = scanLines[scanLines.length - 1].match(/(\d+\.?\d*)秒/);
+    const durationSec = timeMatch ? parseFloat(timeMatch[1]) : null;
+
+    // Mercari: 成功=「✅ ○○ → XX件取得」、キーワード単位の結果
+    // スキャン内で「🔹 プラットフォーム: mercari」が出た後、✅ XX → YY件取得 が成功
+    // エラー = 「Mercari検索エラー」「Search timeout:」でmercariを含む行
+    // 並列処理対応: 「対象プラットフォーム」でtotal++、成功/エラー行でそれぞれカウント
+    // pendingをカウンタにして並列2キーワード以上に対応
+    let mercariTotal = 0;
+    let mercariSuccess = 0;
+    let yahooTotal = 0;
+    let yahooSuccess = 0;
+    let mercariPending = 0;
+    let yahooPending = 0;
+
+    for (const line of scanLines) {
+      const platMatch = line.match(/対象プラットフォーム:\s*(.+)/);
+      if (platMatch) {
+        const plats = platMatch[1].split(',').map(s => s.trim());
+        if (plats.includes('mercari')) {
+          mercariTotal++;
+          mercariPending++;
+        }
+        if (plats.includes('yahoo_flea')) {
+          yahooTotal++;
+          yahooPending++;
+        }
+        continue;
+      }
+
+      // Mercari成功: 「✅ XX → YY件取得」
+      if (mercariPending > 0 && /✅\s*.+\s*→\s*\d+件取得/.test(line)) {
+        mercariSuccess++;
+        mercariPending--;
+      }
+
+      // Yahooフリマ成功
+      if (yahooPending > 0 && /✅\s*Yahoo!フリマ.*整形完了/.test(line)) {
+        yahooSuccess++;
+        yahooPending--;
+      }
+    }
+
+    // errログからもスキャン区間のエラーを補完
+    const errLines = readTailLines(PM2_ERR_LOG, 10000);
+    if (errLines) {
+      // スキャン開始時刻を取得して、それ以降のエラーを数える
+      // ただし時刻の正確な対応は難しいので、outログ解析結果を優先
+      // errログは mercariTotal/yahooTotal の補正には使わない（二重カウント防止）
+    }
+
+    const results = [];
+
+    // 処理時間
+    if (durationSec !== null) {
+      if (durationSec > 600) {
+        results.push({ ok: false, level: 'warning', message: `⚠️ 直近スキャン: ${durationSec.toFixed(0)}秒（600秒超過）` });
+      } else {
+        results.push({ ok: true, message: `📊 直近スキャン: ${durationSec.toFixed(0)}秒` });
+      }
+    } else {
+      results.push({ ok: true, message: '📊 直近スキャン: 処理時間不明' });
+    }
+
+    // Mercari
+    if (mercariTotal > 0) {
+      const rate = (mercariSuccess / mercariTotal) * 100;
+      if (rate < 25) {
+        results.push({ ok: false, level: 'critical', message: `🚨 Mercari: ${mercariSuccess}/${mercariTotal}成功（${rate.toFixed(0)}%）← 異常` });
+      } else if (rate < 50) {
+        results.push({ ok: false, level: 'warning', message: `⚠️ Mercari: ${mercariSuccess}/${mercariTotal}成功（${rate.toFixed(0)}%）` });
+      } else {
+        results.push({ ok: true, message: `✅ Mercari: ${mercariSuccess}/${mercariTotal}成功（${rate.toFixed(0)}%）` });
+      }
+    } else {
+      results.push({ ok: true, message: '📊 Mercari: スキャンデータなし' });
+    }
+
+    // Yahoo
+    if (yahooTotal > 0) {
+      const rate = (yahooSuccess / yahooTotal) * 100;
+      if (rate < 80) {
+        results.push({ ok: false, level: 'warning', message: `⚠️ Yahoo: ${yahooSuccess}/${yahooTotal}成功（${rate.toFixed(0)}%）` });
+      } else {
+        results.push({ ok: true, message: `✅ Yahoo: ${yahooSuccess}/${yahooTotal}成功（${rate.toFixed(0)}%）` });
+      }
+    } else {
+      results.push({ ok: true, message: '📊 Yahoo: スキャンデータなし' });
+    }
+
+    return results;
+  } catch (err) {
+    return [{ ok: true, message: `📊 直近スキャン: データ取得不可（スキップ）` }];
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // メイン
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -275,6 +421,8 @@ async function runHealthCheck() {
   const pm2Result = checkPM2Status();
   const restartResult = checkRestartRate(pm2Result.restarts);
 
+  const scrapeResults = checkScrapeStatus();
+
   const results = [
     checkDisk(),
     checkTemp(),
@@ -282,6 +430,7 @@ async function runHealthCheck() {
     checkChromeProcesses(),
     pm2Result,
     restartResult,
+    ...scrapeResults,
   ];
 
   for (const r of results) {
