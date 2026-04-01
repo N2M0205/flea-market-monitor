@@ -36,6 +36,7 @@ class MercariPuppeteerScraper {
   async _launchBrowser() {
     const browser = await puppeteerExtra.launch({
       headless: 'new',
+      protocolTimeout: 30000,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -48,6 +49,18 @@ class MercariPuppeteerScraper {
       defaultViewport: { width: 1366, height: 768 },
     });
     return browser;
+  }
+
+  _forceCloseBrowser(browser) {
+    try {
+      const pid = browser.process()?.pid;
+      if (pid) {
+        process.kill(pid, 'SIGKILL');
+        console.log(`Force killed browser process PID: ${pid}`);
+      }
+    } catch (killErr) {
+      console.error('Force kill also failed:', killErr.message);
+    }
   }
 
   async _setupPage(page) {
@@ -70,6 +83,14 @@ class MercariPuppeteerScraper {
   }
 
   async search(keyword, options = {}) {
+    const SEARCH_TIMEOUT_MS = 60000;
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Search timeout: ${keyword} exceeded ${SEARCH_TIMEOUT_MS}ms`)), SEARCH_TIMEOUT_MS)
+    );
+    return Promise.race([this._searchInternal(keyword, options), timeoutPromise]);
+  }
+
+  async _searchInternal(keyword, options = {}) {
     const { minPrice = null, maxPrice = null, limit = 20 } = options;
     const results = [];
 
@@ -238,7 +259,14 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       return [];
     } finally {
       if (page) await page.close().catch(() => {});
-      if (browser) await browser.close().catch(() => {});
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (closeErr) {
+          console.error('browser.close() failed, force killing:', closeErr.message);
+          this._forceCloseBrowser(browser);
+        }
+      }
     }
   }
 
@@ -295,7 +323,14 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       return null;
     } finally {
       if (page) await page.close().catch(() => {});
-      if (browser) await browser.close().catch(() => {});
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (closeErr) {
+          console.error('browser.close() failed, force killing:', closeErr.message);
+          this._forceCloseBrowser(browser);
+        }
+      }
     }
   }
 

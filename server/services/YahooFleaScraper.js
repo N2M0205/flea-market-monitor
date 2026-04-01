@@ -53,6 +53,7 @@ class YahooFleaScraper {
   async _launchBrowser() {
     const browser = await puppeteerExtra.launch({
       headless: 'new',
+      protocolTimeout: 30000,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -65,6 +66,18 @@ class YahooFleaScraper {
       defaultViewport: { width: 1366, height: 768 },
     });
     return browser;
+  }
+
+  _forceCloseBrowser(browser) {
+    try {
+      const pid = browser.process()?.pid;
+      if (pid) {
+        process.kill(pid, 'SIGKILL');
+        console.log(`Force killed browser process PID: ${pid}`);
+      }
+    } catch (killErr) {
+      console.error('Force kill also failed:', killErr.message);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -93,13 +106,21 @@ class YahooFleaScraper {
   // 商品検索
   // ─────────────────────────────────────────────
   async search(keyword, options = {}) {
-    const { min_price, max_price, limit = 20 } = options;
-
     // 連続ERR_ABORTEDで自動停止中ならスキップ
     if (this.abortedSuspended) {
       console.log(`⏭️ Yahoo!フリマ: 自動停止中のためスキップ [${keyword}]`);
       return [];
     }
+
+    const SEARCH_TIMEOUT_MS = 60000;
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Search timeout: ${keyword} exceeded ${SEARCH_TIMEOUT_MS}ms`)), SEARCH_TIMEOUT_MS)
+    );
+    return Promise.race([this._searchInternal(keyword, options), timeoutPromise]);
+  }
+
+  async _searchInternal(keyword, options = {}) {
+    const { min_price, max_price, limit = 20 } = options;
 
     let browser = null;
     try {
@@ -317,7 +338,14 @@ class YahooFleaScraper {
 
       return [];
     } finally {
-      if (browser) await browser.close().catch(() => {});
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (closeErr) {
+          console.error('browser.close() failed, force killing:', closeErr.message);
+          this._forceCloseBrowser(browser);
+        }
+      }
     }
   }
 
@@ -347,7 +375,14 @@ class YahooFleaScraper {
       console.error('❌ 商品詳細取得エラー:', error.message);
       return {};
     } finally {
-      if (browser) await browser.close().catch(() => {});
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (closeErr) {
+          console.error('browser.close() failed, force killing:', closeErr.message);
+          this._forceCloseBrowser(browser);
+        }
+      }
     }
   }
 
