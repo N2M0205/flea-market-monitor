@@ -5,9 +5,9 @@
  *
  * 監視項目:
  *   - ディスク空き容量 (5GB / 2GB)
- *   - Tempフォルダサイズ (5GB / 10GB)
- *   - メモリ使用率 (85% / 95%)
- *   - Chrome プロセス数 (10個超)
+ *   - Tempフォルダサイズ (10GB / 20GB)
+ *   - メモリ使用率 (92% / 97%)
+ *   - Chrome プロセス数 (15個/25個)
  *   - PM2 picofuri-backend の status (online以外)
  *   - picofuri-backend 再起動回数 (30分間で5回以上)
  *   - スクレイピング成功率 (Mercari 50%/25%, Yahoo 80%, 処理時間600秒)
@@ -150,11 +150,11 @@ function checkTemp() {
     const sizeGB = totalBytes / (1024 ** 3);
     const approx = timedOut ? '約' : '';
 
-    if (sizeGB > 10) {
-      return { ok: false, level: 'critical', sizeGB, message: `🚨 Temp: ${approx}${sizeGB.toFixed(1)}GB（10GB超 - 緊急）` };
+    if (sizeGB > 20) {
+      return { ok: false, level: 'critical', sizeGB, message: `🚨 Temp: ${approx}${sizeGB.toFixed(1)}GB（20GB超 - 緊急）` };
     }
-    if (sizeGB > 5) {
-      return { ok: false, level: 'warning', sizeGB, message: `⚠️ Temp: ${approx}${sizeGB.toFixed(1)}GB（閾値5GB）` };
+    if (sizeGB > 10) {
+      return { ok: false, level: 'warning', sizeGB, message: `⚠️ Temp: ${approx}${sizeGB.toFixed(1)}GB（閾値10GB）` };
     }
     return { ok: true, sizeGB, message: `✅ Temp: ${approx}${sizeGB.toFixed(1)}GB` };
   } catch (err) {
@@ -177,11 +177,11 @@ function checkMemory() {
     const freeKB = parseInt(freeMatch[1], 10);
     const usagePct = ((totalKB - freeKB) / totalKB) * 100;
 
-    if (usagePct > 95) {
-      return { ok: false, level: 'critical', usagePct, message: `🚨 メモリ使用率 ${usagePct.toFixed(1)}%（95%超 - 緊急）` };
+    if (usagePct > 97) {
+      return { ok: false, level: 'critical', usagePct, message: `🚨 メモリ使用率 ${usagePct.toFixed(1)}%（97%超 - 緊急）` };
     }
-    if (usagePct > 85) {
-      return { ok: false, level: 'warning', usagePct, message: `⚠️ メモリ使用率 ${usagePct.toFixed(1)}%（85%超）` };
+    if (usagePct > 92) {
+      return { ok: false, level: 'warning', usagePct, message: `⚠️ メモリ使用率 ${usagePct.toFixed(1)}%（92%超）` };
     }
     return { ok: true, usagePct, message: `✅ メモリ使用率 ${usagePct.toFixed(1)}%` };
   } catch (err) {
@@ -198,7 +198,10 @@ function checkChromeProcesses() {
     const lines = raw.split('\n').filter(l => l.trim().length > 0);
     const count = lines.length;
 
-    if (count > 10) {
+    if (count > 25) {
+      return { ok: false, level: 'critical', count, message: `🚨 Chromeプロセス数: ${count}個（25個超 - 緊急）` };
+    }
+    if (count > 15) {
       return { ok: false, level: 'warning', count, message: `⚠️ Chromeプロセス数: ${count}個（異常蓄積の兆候）` };
     }
     return { ok: true, count, message: `✅ Chromeプロセス数: ${count}個` };
