@@ -116,7 +116,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       console.log(`🔍 Mercari検索: ${keyword} → ${searchUrl}`);
 
       // ── ページ遷移 ────────────────────────────────────────────
-      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 45000 });
       await this._sleep(2000 + Math.random() * 2000); // 2〜4秒ランダム待機
 
       // ── networkidle2後の描画待機（item-cellが出現するまで最大10秒）──

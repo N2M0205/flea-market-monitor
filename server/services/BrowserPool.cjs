@@ -7,7 +7,7 @@
  * acquire() → ブラウザ起動 → finally で release() のパターンで使う。
  */
 
-const MAX_BROWSERS = 4;
+const MAX_BROWSERS = 6;
 const ACQUIRE_TIMEOUT_MS = 60000;
 
 class BrowserPool {
