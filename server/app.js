@@ -57,9 +57,9 @@ app.get('/api/health', async (_req, res) => {
   try {
     const dbOk = await sequelize.authenticate().then(() => true).catch(() => false);
 
-    const latestProduct = await Product.findOne({ order: [['created_at', 'DESC']], attributes: ['created_at'] });
+    const latestProduct = await Product.findOne({ order: [['created_at', 'DESC']] });
     const lastScanAge = latestProduct
-      ? Math.floor((Date.now() - new Date(latestProduct.created_at)) / 60000)
+      ? Math.floor((Date.now() - new Date(latestProduct.createdAt)) / 60000)
       : null;
 
     const healthy = dbOk && (lastScanAge === null || lastScanAge < 60);
