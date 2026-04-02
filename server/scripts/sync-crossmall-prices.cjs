@@ -37,30 +37,67 @@ function formatDate(date) {
 }
 
 /**
- * 指定期間の注文番号を1日単位で分割取得（1回ごとに1秒待機）
- * 100件/日上限ヒット時は警告ログを出力
+ * 1日分の注文を全件取得（order_numberページネーション対応）
+ * 100件返ってきたら最後のorder_numberで次ページを取得するループ
+ * 最大10ページ（1,000件/日）で安全停止
+ */
+const MAX_PAGES_PER_DAY = 10;
+
+async function fetchAllOrdersForDate(crossmall, date) {
+  const dateStr = formatDate(date);
+  const allOrderNumbers = [];
+  const allOrderMeta = new Map();
+  let lastOrderNumber = null;
+  let page = 0;
+
+  while (page < MAX_PAGES_PER_DAY) {
+    const { orderNumbers: nums, orderMeta, hitLimit } = await crossmall.fetchOrdersForRange(date, date, lastOrderNumber);
+
+    for (const n of nums) {
+      if (!allOrderMeta.has(n)) {
+        allOrderNumbers.push(n);
+        allOrderMeta.set(n, orderMeta.get(n));
+      }
+    }
+
+    page++;
+
+    if (nums.length < 100) break; // 最終ページ
+
+    // 次ページ用に最後のorder_numberを記録
+    const sorted = [...nums].sort();
+    lastOrderNumber = sorted[sorted.length - 1];
+    console.log(`  📄 ${dateStr}: ページ${page + 1}取得中（${lastOrderNumber}以降）`);
+    await sleep(FETCH_DELAY_MS);
+  }
+
+  return { orderNumbers: allOrderNumbers, orderMeta: allOrderMeta, pages: page };
+}
+
+/**
+ * 指定期間の注文番号を1日単位で分割取得（ページネーション対応）
  */
 async function fetchOrderNumbersChunked(crossmall, fromDate, toDate) {
   const orderMetaMap = new Map();
   const current = new Date(fromDate);
   let chunkIndex = 0;
-  let limitHitDays = 0;
+  let totalApiCalls = 0;
 
-  console.log(`🔍 注文番号取得: ${formatDate(fromDate)} ~ ${formatDate(toDate)} (1日単位分割)`);
+  console.log(`🔍 注文番号取得: ${formatDate(fromDate)} ~ ${formatDate(toDate)} (1日単位分割+ページネーション)`);
 
   while (current <= toDate) {
-    const { orderNumbers: nums, orderMeta, hitLimit } = await crossmall.fetchOrdersForRange(current, current);
+    const { orderNumbers: nums, orderMeta, pages } = await fetchAllOrdersForDate(crossmall, current);
 
     for (const n of nums) {
       if (!orderMetaMap.has(n)) orderMetaMap.set(n, orderMeta.get(n));
     }
 
     chunkIndex++;
-    if (hitLimit) {
-      limitHitDays++;
-      console.log(`  [${chunkIndex}] ${formatDate(current)}: ${nums.length}件 ⚠️ 上限100件ヒット（取りこぼしあり） (累計: ${orderMetaMap.size})`);
-    } else if (nums.length > 0) {
-      console.log(`  [${chunkIndex}] ${formatDate(current)}: ${nums.length}件 (累計: ${orderMetaMap.size})`);
+    totalApiCalls += pages;
+
+    if (nums.length > 0) {
+      const pageInfo = pages > 1 ? ` (${pages}ページ)` : '';
+      console.log(`  [${chunkIndex}] ${formatDate(current)}: ${nums.length}件${pageInfo} (累計: ${orderMetaMap.size})`);
     }
 
     current.setDate(current.getDate() + 1);
@@ -68,10 +105,7 @@ async function fetchOrderNumbersChunked(crossmall, fromDate, toDate) {
   }
 
   const orderNumbers = [...orderMetaMap.keys()].sort();
-  console.log(`✅ ${orderNumbers.length}件の注文を取得 (${chunkIndex}回のAPIコール)`);
-  if (limitHitDays > 0) {
-    console.warn(`⚠️ ${limitHitDays}日で100件上限ヒット（一部注文の取りこぼしあり）`);
-  }
+  console.log(`✅ ${orderNumbers.length}件の注文を取得 (${totalApiCalls}回のAPIコール)`);
   return { orderNumbers, orderMetaMap };
 }
 

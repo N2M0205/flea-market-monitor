@@ -157,13 +157,20 @@ class CrossmallService {
 
   /**
    * 指定期間の注文を1回のAPIコールで取得（最大100件）
-   * @returns {{ orderNumbers: string[], orderMeta: Map<string, { deliveryType: string }> }}
+   * @param {Date} fromDate
+   * @param {Date} toDate
+   * @param {string|null} afterOrderNumber - この番号より大きい注文を取得（ページネーション用）
+   * @returns {{ orderNumbers: string[], orderMeta: Map<string, { deliveryType: string }>, hitLimit: boolean }}
    */
-  async _fetchOrdersForRange(fromDate, toDate) {
-    const result = await this.makeRequest('get_order', {
+  async _fetchOrdersForRange(fromDate, toDate, afterOrderNumber = null) {
+    const params = {
       order_date_fr: this._formatDate(fromDate),
       order_date_to: this._formatDate(toDate)
-    });
+    };
+    if (afterOrderNumber) {
+      params.order_number = afterOrderNumber;
+    }
+    const result = await this.makeRequest('get_order', params);
 
     if (!result) return { orderNumbers: [], orderMeta: new Map(), hitLimit: false };
 
@@ -245,8 +252,8 @@ class CrossmallService {
   /**
    * 指定日付範囲の注文を取得（公開API）
    */
-  async fetchOrdersForRange(fromDate, toDate) {
-    return this._fetchOrdersForRange(fromDate, toDate);
+  async fetchOrdersForRange(fromDate, toDate, afterOrderNumber = null) {
+    return this._fetchOrdersForRange(fromDate, toDate, afterOrderNumber);
   }
 
   async getOrderDetail(orderNumber) {
