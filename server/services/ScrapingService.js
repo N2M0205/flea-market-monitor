@@ -173,6 +173,8 @@ class ScrapingService {
       console.log(`\n✅ 全キーワードのスクレイピング完了（${keywords.length}件 / ${elapsed}秒）\n`);
       runLog(`✅ 巡回完了: ${keywords.length}キーワード / ${elapsed}秒`);
 
+      return { success: true, totalProducts: keywords.length, elapsed };
+
     } finally {
       // ブラウザを確実に閉じてメモリ解放
       for (const [name, scraper] of Object.entries(this.scrapers)) {

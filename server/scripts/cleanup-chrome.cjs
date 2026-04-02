@@ -212,7 +212,7 @@ function shouldDelete(entry, parentDir, now) {
   const isDir = entry.isDirectory();
 
   // Puppeteer一時プロファイル → 即削除
-  if (isDir && name.startsWith('puppeteer_dev_chrome_profile-')) return true;
+  if (isDir && name.startsWith('puppeteer_dev_')) return true;
 
   // Chromium/Chrome一時フォルダ → 即削除
   if (isDir && (name.startsWith('chromium_') || name.startsWith('chrome_'))) return true;
