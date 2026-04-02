@@ -48,8 +48,33 @@ app.use('/api/settings', settingsRouter);
 const { seedLayerASettings } = require('./services/LayerAFilterService');
 seedLayerASettings().catch(err => console.warn('seedLayerASettings:', err.message));
 
-// ヘルスチェック
+// ヘルスチェック（簡易）
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+// ヘルスチェック（外部監視用）
+const { sequelize, Product } = require('./models');
+app.get('/api/health', async (_req, res) => {
+  try {
+    const dbOk = await sequelize.authenticate().then(() => true).catch(() => false);
+
+    const latestProduct = await Product.findOne({ order: [['created_at', 'DESC']], attributes: ['created_at'] });
+    const lastScanAge = latestProduct
+      ? Math.floor((Date.now() - new Date(latestProduct.created_at)) / 60000)
+      : null;
+
+    const healthy = dbOk && (lastScanAge === null || lastScanAge < 60);
+
+    res.status(healthy ? 200 : 503).json({
+      status: healthy ? 'ok' : 'unhealthy',
+      db: dbOk ? 'connected' : 'disconnected',
+      lastScanMinutesAgo: lastScanAge,
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(503).json({ status: 'error', message: err.message });
+  }
+});
 
 // 404
 app.use((_req, res) => res.status(404).json({ error: 'Not Found' }));
