@@ -207,7 +207,7 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function shouldDelete(entry, now) {
+function shouldDelete(entry, parentDir, now) {
   const name = entry.name;
   const isDir = entry.isDirectory();
 
@@ -220,7 +220,7 @@ function shouldDelete(entry, now) {
   // .tmpファイル（1時間以上経過）
   if (!isDir && name.endsWith('.tmp')) {
     try {
-      const stat = fs.statSync(path.join(os.tmpdir(), name));
+      const stat = fs.statSync(path.join(parentDir, name));
       if (now - stat.birthtimeMs >= TMP_AGE_THRESHOLD_MS) return true;
     } catch { /* skip */ }
   }
@@ -228,7 +228,7 @@ function shouldDelete(entry, now) {
   // tmpで始まるフォルダ（1時間以上経過）
   if (isDir && name.startsWith('tmp')) {
     try {
-      const stat = fs.statSync(path.join(os.tmpdir(), name));
+      const stat = fs.statSync(path.join(parentDir, name));
       if (now - stat.birthtimeMs >= TMP_AGE_THRESHOLD_MS) return true;
     } catch { /* skip */ }
   }
@@ -239,58 +239,87 @@ function shouldDelete(entry, now) {
 function cleanupTemp() {
   console.log(`[temp-cleanup] 実行開始: ${new Date().toISOString()}`);
 
-  const tempDir = os.tmpdir();
-  let entries;
+  // Tempフォルダの掃除対象を全サブフォルダに拡張
+  // process.env.TEMP は Temp\1 等を指すことがあるので、その親ディレクトリを基点にする
+  const baseTempDir = path.dirname(process.env.TEMP || os.tmpdir()); // C:\Users\...\AppData\Local\Temp
+  const tempDirs = [];
+  // Temp直下
+  tempDirs.push(baseTempDir);
+
+  // Temp\1, Temp\2, Temp\3 ... 等の数字サブフォルダも対象
   try {
-    entries = fs.readdirSync(tempDir, { withFileTypes: true });
-  } catch (err) {
-    console.error(`[temp-cleanup] TEMPディレクトリ読み取りエラー: ${err.message}`);
-    return;
+    const baseEntries = fs.readdirSync(baseTempDir, { withFileTypes: true });
+    for (const entry of baseEntries) {
+      if (entry.isDirectory() && /^\d+$/.test(entry.name)) {
+        tempDirs.push(path.join(baseTempDir, entry.name));
+      }
+    }
+  } catch (e) {
+    console.log(`[temp-cleanup] Tempサブフォルダ列挙エラー: ${e.message}`);
   }
+
+  const dirLabels = tempDirs.map(d => path.basename(d) === 'Temp' ? 'Temp' : `Temp\\${path.basename(d)}`);
+  console.log(`[temp-cleanup] Temp掃除開始（対象: ${dirLabels.join(', ')}）`);
 
   const now = Date.now();
-  const targets = [];
+  let grandTotalFreed = 0;
 
-  for (const entry of entries) {
-    if (shouldDelete(entry, now)) {
-      targets.push(entry);
-    }
-  }
+  for (const tempDir of tempDirs) {
+    const label = tempDir === baseTempDir ? 'Temp' : `Temp\\${path.basename(tempDir)}`;
 
-  if (targets.length === 0) {
-    console.log('[temp-cleanup] 削除対象なし');
-    return;
-  }
-
-  // 削除前サイズ計算
-  let totalSize = 0;
-  for (const entry of targets) {
-    totalSize += getEntrySize(path.join(tempDir, entry.name), entry.isDirectory());
-  }
-  console.log(`[temp-cleanup] 削除対象: ${targets.length}件, 合計サイズ: ${formatBytes(totalSize)}`);
-
-  let deleted = 0;
-  let failed = 0;
-  let freedBytes = 0;
-
-  for (const entry of targets) {
-    const fullPath = path.join(tempDir, entry.name);
-    const entrySize = getEntrySize(fullPath, entry.isDirectory());
+    let entries;
     try {
-      fs.rmSync(fullPath, { recursive: true, force: true });
-      deleted++;
-      freedBytes += entrySize;
+      entries = fs.readdirSync(tempDir, { withFileTypes: true });
     } catch (err) {
-      if (err.code === 'EBUSY' || err.code === 'EPERM') {
-        // 使用中 → スキップ
-      } else {
-        console.warn(`[temp-cleanup] 削除失敗: ${entry.name} (${err.code || err.message})`);
-      }
-      failed++;
+      console.error(`[temp-cleanup] ${label}: 読み取りエラー: ${err.message}`);
+      continue;
     }
+
+    const targets = [];
+    for (const entry of entries) {
+      if (shouldDelete(entry, tempDir, now)) {
+        targets.push(entry);
+      }
+    }
+
+    if (targets.length === 0) {
+      console.log(`[temp-cleanup] ${label}: 削除対象なし`);
+      continue;
+    }
+
+    // 削除前サイズ計算
+    let totalSize = 0;
+    for (const entry of targets) {
+      totalSize += getEntrySize(path.join(tempDir, entry.name), entry.isDirectory());
+    }
+    console.log(`[temp-cleanup] ${label}: 対象 ${targets.length}件 (${formatBytes(totalSize)})`);
+
+    let deleted = 0;
+    let failed = 0;
+    let freedBytes = 0;
+
+    for (const entry of targets) {
+      const fullPath = path.join(tempDir, entry.name);
+      const entrySize = getEntrySize(fullPath, entry.isDirectory());
+      try {
+        fs.rmSync(fullPath, { recursive: true, force: true });
+        deleted++;
+        freedBytes += entrySize;
+      } catch (err) {
+        if (err.code === 'EBUSY' || err.code === 'EPERM') {
+          // 使用中 → スキップ
+        } else {
+          console.warn(`[temp-cleanup] ${label}: 削除失敗: ${entry.name} (${err.code || err.message})`);
+        }
+        failed++;
+      }
+    }
+
+    console.log(`[temp-cleanup] ${label}: 削除完了 ${deleted}件, 失敗${failed}件, ${formatBytes(freedBytes)}解放`);
+    grandTotalFreed += freedBytes;
   }
 
-  console.log(`[temp-cleanup] 完了: 削除${deleted}件, 失敗${failed}件, 解放サイズ: ${formatBytes(freedBytes)}`);
+  console.log(`[temp-cleanup] 合計: ${formatBytes(grandTotalFreed)}解放`);
 }
 
 try {
