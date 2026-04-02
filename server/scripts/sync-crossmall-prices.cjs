@@ -229,10 +229,31 @@ async function syncStock(crossmall) {
   console.log(`✅ 在庫同期完了: ${updated}件更新, ${errors}件エラー`);
 }
 
+/**
+ * picofuri-backend の PurchaseMasterCache をホットリロード
+ */
+async function notifyCacheReload() {
+  const port = process.env.PORT || 3001;
+  const url = `http://localhost:${port}/api/cache/reload`;
+  console.log(`\n[CACHE-RELOAD] backendにキャッシュリロードを通知: ${url}`);
+  try {
+    const res = await fetch(url, { method: 'POST' });
+    const body = await res.json();
+    if (body.success) {
+      console.log(`[CACHE-RELOAD] 成功: ${body.itemCount}件リロード (${body.reloadedAt})`);
+    } else {
+      console.warn(`[CACHE-RELOAD] リロード失敗: ${JSON.stringify(body)}`);
+    }
+  } catch (err) {
+    console.warn(`[CACHE-RELOAD] 通知失敗（backendが停止中?）: ${err.message}`);
+  }
+}
+
 main()
   .then(async () => {
     const crossmall = new CrossmallService();
     await syncStock(crossmall);
+    await notifyCacheReload();
     process.exit(0);
   })
   .catch(err => {

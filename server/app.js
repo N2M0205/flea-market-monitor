@@ -76,6 +76,23 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
+// キャッシュホットリロード（localhost限定）
+const purchaseMasterCache = require('./services/PurchaseMasterCache');
+app.post('/api/cache/reload', (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  if (ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
+    console.log(`[CACHE-RELOAD] 拒否: リクエスト元 ${ip}`);
+    return res.status(403).json({ error: 'Forbidden: localhost only' });
+  }
+
+  const result = purchaseMasterCache.reloadFromDisk();
+  res.json({
+    success: result.success,
+    itemCount: result.itemCount,
+    reloadedAt: new Date().toISOString()
+  });
+});
+
 // 404
 app.use((_req, res) => res.status(404).json({ error: 'Not Found' }));
 

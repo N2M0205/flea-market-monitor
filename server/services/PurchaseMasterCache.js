@@ -127,6 +127,24 @@ class PurchaseMasterCache {
     return { updated, notFound };
   }
 
+  /**
+   * ディスクからキャッシュをホットリロード（外部エンドポイント用）
+   * @returns {{ success: boolean, itemCount: number, lastSalePriceSyncedAt: string|null }}
+   */
+  reloadFromDisk() {
+    console.log('[CACHE-RELOAD] ディスクからキャッシュをリロード中...');
+    try {
+      this._loadFromDisk();
+      const itemCount = Object.keys(this._cache.itemMap).length;
+      const lastSalePriceSyncedAt = this._cache.lastSalePriceSyncedAt || null;
+      console.log(`[CACHE-RELOAD] リロード完了: ${itemCount}件, lastSalePriceSyncedAt=${lastSalePriceSyncedAt}`);
+      return { success: true, itemCount, lastSalePriceSyncedAt };
+    } catch (err) {
+      console.error(`[CACHE-RELOAD] リロード失敗: ${err.message}`);
+      return { success: false, itemCount: 0, lastSalePriceSyncedAt: null };
+    }
+  }
+
   // ─────────────────────────────────────────────
   // プライベートメソッド
   // ─────────────────────────────────────────────
