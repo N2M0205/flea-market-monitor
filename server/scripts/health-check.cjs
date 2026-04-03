@@ -177,11 +177,11 @@ function checkMemory() {
     const freeKB = parseInt(freeMatch[1], 10);
     const usagePct = ((totalKB - freeKB) / totalKB) * 100;
 
-    if (usagePct > 97) {
-      return { ok: false, level: 'critical', usagePct, message: `🚨 メモリ使用率 ${usagePct.toFixed(1)}%（97%超 - 緊急）` };
-    }
     if (usagePct > 92) {
-      return { ok: false, level: 'warning', usagePct, message: `⚠️ メモリ使用率 ${usagePct.toFixed(1)}%（92%超）` };
+      return { ok: false, level: 'critical', usagePct, message: `🚨 メモリ使用率 ${usagePct.toFixed(1)}%（92%超 - 緊急）` };
+    }
+    if (usagePct > 85) {
+      return { ok: false, level: 'warning', usagePct, message: `⚠️ メモリ使用率 ${usagePct.toFixed(1)}%（85%超）` };
     }
     return { ok: true, usagePct, message: `✅ メモリ使用率 ${usagePct.toFixed(1)}%` };
   } catch (err) {
@@ -198,10 +198,10 @@ function checkChromeProcesses() {
     const lines = raw.split('\n').filter(l => l.trim().length > 0);
     const count = lines.length;
 
-    if (count > 35) {
-      return { ok: false, level: 'critical', count, message: `🚨 Chromeプロセス数: ${count}個（35個超 - 緊急）` };
+    if (count > 50) {
+      return { ok: false, level: 'critical', count, message: `🚨 Chromeプロセス数: ${count}個（50個超 - 緊急）` };
     }
-    if (count > 30) {
+    if (count > 40) {
       return { ok: false, level: 'warning', count, message: `⚠️ Chromeプロセス数: ${count}個（異常蓄積の兆候）` };
     }
     return { ok: true, count, message: `✅ Chromeプロセス数: ${count}個` };
