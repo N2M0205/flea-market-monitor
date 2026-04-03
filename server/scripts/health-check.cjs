@@ -201,7 +201,7 @@ function checkChromeProcesses() {
     if (count > 35) {
       return { ok: false, level: 'critical', count, message: `🚨 Chromeプロセス数: ${count}個（35個超 - 緊急）` };
     }
-    if (count > 25) {
+    if (count > 30) {
       return { ok: false, level: 'warning', count, message: `⚠️ Chromeプロセス数: ${count}個（異常蓄積の兆候）` };
     }
     return { ok: true, count, message: `✅ Chromeプロセス数: ${count}個` };
