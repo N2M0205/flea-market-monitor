@@ -14,10 +14,10 @@ class MercariPuppeteerScraper {
   constructor() {
     this.baseUrl = 'https://jp.mercari.com';
     this.userAgents = [
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
     ];
   }
 
@@ -43,7 +43,6 @@ class MercariPuppeteerScraper {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--single-process',
         '--window-size=1366,768',
         '--lang=ja-JP,ja',
       ],
@@ -84,17 +83,6 @@ class MercariPuppeteerScraper {
   }
 
   async search(keyword, options = {}) {
-    const SEARCH_TIMEOUT_MS = 60000;
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Search timeout: ${keyword} exceeded ${SEARCH_TIMEOUT_MS}ms`)), SEARCH_TIMEOUT_MS)
-    );
-    return Promise.race([this._searchInternal(keyword, options), timeoutPromise]);
-  }
-
-  async _searchInternal(keyword, options = {}) {
-    const { minPrice = null, maxPrice = null, limit = 20 } = options;
-    const results = [];
-
     let browser = null;
     let page = null;
     let poolAcquired = false;
@@ -104,6 +92,29 @@ class MercariPuppeteerScraper {
       browser = await this._launchBrowser();
       page = await browser.newPage();
       await this._setupPage(page);
+      return await this._searchInternal(page, keyword, options);
+    } catch (err) {
+      console.error(`❌ Mercari検索エラー [${keyword}]: ${err.message}`);
+      return [];
+    } finally {
+      if (page) await page.close().catch(() => {});
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (closeErr) {
+          console.error('browser.close() failed, force killing:', closeErr.message);
+          this._forceCloseBrowser(browser);
+        }
+      }
+      if (poolAcquired) browserPool.release();
+    }
+  }
+
+  async _searchInternal(page, keyword, options = {}) {
+    const { minPrice = null, maxPrice = null, limit = 20 } = options;
+    const results = [];
+
+    try {
 
       // URL構築
       const params = new URLSearchParams({ keyword });
@@ -270,17 +281,6 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
     } catch (err) {
       console.error(`❌ Mercari検索エラー [${keyword}]: ${err.message}`);
       return [];
-    } finally {
-      if (page) await page.close().catch(() => {});
-      if (browser) {
-        try {
-          await browser.close();
-        } catch (closeErr) {
-          console.error('browser.close() failed, force killing:', closeErr.message);
-          this._forceCloseBrowser(browser);
-        }
-      }
-      if (poolAcquired) browserPool.release();
     }
   }
 

@@ -33,10 +33,10 @@ class YahooFleaScraper {
     this.abortedSuspended = false;
 
     this.userAgents = [
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
     ];
   }
 
@@ -60,7 +60,6 @@ class YahooFleaScraper {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--single-process',
         '--window-size=1366,768',
         '--lang=ja-JP,ja',
       ],
@@ -113,16 +112,6 @@ class YahooFleaScraper {
       return [];
     }
 
-    const SEARCH_TIMEOUT_MS = 60000;
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Search timeout: ${keyword} exceeded ${SEARCH_TIMEOUT_MS}ms`)), SEARCH_TIMEOUT_MS)
-    );
-    return Promise.race([this._searchInternal(keyword, options), timeoutPromise]);
-  }
-
-  async _searchInternal(keyword, options = {}) {
-    const { min_price, max_price, limit = 20 } = options;
-
     let browser = null;
     let poolAcquired = false;
     try {
@@ -131,6 +120,38 @@ class YahooFleaScraper {
       browser = await this._launchBrowser();
       const page = await browser.newPage();
       await this._setupPage(page);
+      return await this._searchInternal(page, keyword, options);
+    } catch (error) {
+      console.error('❌ Yahoo!フリマスクレイピングエラー:', error.message);
+
+      // ERR_ABORTED 連続検知 → 自動停止
+      if (error.message.includes('ERR_ABORTED')) {
+        this.consecutiveAbortCount++;
+        console.warn(`⚠️ Yahoo!フリマ ERR_ABORTED 連続 ${this.consecutiveAbortCount}/${this.MAX_CONSECUTIVE_ABORTS} 回`);
+        if (this.consecutiveAbortCount >= this.MAX_CONSECUTIVE_ABORTS) {
+          this.abortedSuspended = true;
+          console.error(`🚫 Yahoo!フリマ: ERR_ABORTED ${this.MAX_CONSECUTIVE_ABORTS}回連続のため、今回スキャンの残りキーワードをスキップします`);
+        }
+      }
+
+      return [];
+    } finally {
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (closeErr) {
+          console.error('browser.close() failed, force killing:', closeErr.message);
+          this._forceCloseBrowser(browser);
+        }
+      }
+      if (poolAcquired) browserPool.release();
+    }
+  }
+
+  async _searchInternal(page, keyword, options = {}) {
+    const { min_price, max_price, limit = 20 } = options;
+
+    try {
 
       // ── URL構築 ────────────────────────────────
       const encodedKeyword = encodeURIComponent(keyword);
@@ -328,29 +349,7 @@ class YahooFleaScraper {
       return formatted;
 
     } catch (error) {
-      console.error('❌ Yahoo!フリマスクレイピングエラー:', error.message);
-
-      // ERR_ABORTED 連続検知 → 自動停止
-      if (error.message.includes('ERR_ABORTED')) {
-        this.consecutiveAbortCount++;
-        console.warn(`⚠️ Yahoo!フリマ ERR_ABORTED 連続 ${this.consecutiveAbortCount}/${this.MAX_CONSECUTIVE_ABORTS} 回`);
-        if (this.consecutiveAbortCount >= this.MAX_CONSECUTIVE_ABORTS) {
-          this.abortedSuspended = true;
-          console.error(`🚫 Yahoo!フリマ: ERR_ABORTED ${this.MAX_CONSECUTIVE_ABORTS}回連続のため、今回スキャンの残りキーワードをスキップします`);
-        }
-      }
-
-      return [];
-    } finally {
-      if (browser) {
-        try {
-          await browser.close();
-        } catch (closeErr) {
-          console.error('browser.close() failed, force killing:', closeErr.message);
-          this._forceCloseBrowser(browser);
-        }
-      }
-      if (poolAcquired) browserPool.release();
+      throw error; // search() の catch/finally に委譲
     }
   }
 
