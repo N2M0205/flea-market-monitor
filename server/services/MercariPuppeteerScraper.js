@@ -63,6 +63,20 @@ class MercariPuppeteerScraper {
     }
   }
 
+  async _closeBrowser(browser, timeoutMs = 10000) {
+    try {
+      await Promise.race([
+        browser.close(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`browser.close() timed out (${timeoutMs}ms)`)), timeoutMs)
+        ),
+      ]);
+    } catch (err) {
+      console.error(`browser.close() failed/timeout, force killing: ${err.message}`);
+      this._forceCloseBrowser(browser);
+    }
+  }
+
   async _setupPage(page) {
     const ua = this._getRandomUserAgent();
     await page.setUserAgent(ua);
@@ -98,14 +112,7 @@ class MercariPuppeteerScraper {
       return [];
     } finally {
       if (page) await page.close().catch(() => {});
-      if (browser) {
-        try {
-          await browser.close();
-        } catch (closeErr) {
-          console.error('browser.close() failed, force killing:', closeErr.message);
-          this._forceCloseBrowser(browser);
-        }
-      }
+      if (browser) await this._closeBrowser(browser);
       if (poolAcquired) browserPool.release();
     }
   }
@@ -340,14 +347,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       return null;
     } finally {
       if (page) await page.close().catch(() => {});
-      if (browser) {
-        try {
-          await browser.close();
-        } catch (closeErr) {
-          console.error('browser.close() failed, force killing:', closeErr.message);
-          this._forceCloseBrowser(browser);
-        }
-      }
+      if (browser) await this._closeBrowser(browser);
       if (poolAcquired) browserPool.release();
     }
   }

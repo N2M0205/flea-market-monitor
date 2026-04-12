@@ -1,5 +1,9 @@
 // server/services/ScrapingService.js
 
+const { execSync } = require('child_process');
+const fs   = require('fs');
+const path = require('path');
+const os   = require('os');
 const { Op } = require('sequelize');
 const { Keyword, Product } = require('../models');
 const MercariPuppeteerScraper  = require('./MercariPuppeteerScraper');
@@ -99,6 +103,77 @@ class ScrapingService {
     return this.isRunning;
   }
 
+  async _cleanupZombieBrowsers() {
+    const LEAK_THRESHOLD_MS = 3 * 60 * 1000; // 3分超 = ゾンビ判定
+    const now = Date.now();
+    let killedChrome = 0;
+    let cleanedDirs  = 0;
+
+    // ── 1. 3分超の chrome.exe をkill ────────────────────────────────
+    try {
+      const raw = execSync('tasklist /FI "IMAGENAME eq chrome.exe" /FO CSV /NH', { encoding: 'utf-8' });
+      const pids = [];
+      for (const line of raw.split('\n')) {
+        const m = line.trim().match(/"chrome\.exe","(\d+)"/i);
+        if (m) pids.push(parseInt(m[1], 10));
+      }
+
+      for (const pid of pids) {
+        try {
+          const wmicOut = execSync(
+            `wmic process where (ProcessId=${pid}) get CreationDate /format:csv`,
+            { encoding: 'utf-8', timeout: 5000 }
+          );
+          for (const wline of wmicOut.split('\n')) {
+            const parts = wline.trim().split(',');
+            const dateStr = parts[parts.length - 1];
+            const dm = dateStr.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+            if (dm) {
+              const [, y, mo, d, h, mi, s] = dm;
+              const elapsed = now - new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}`).getTime();
+              if (elapsed >= LEAK_THRESHOLD_MS) {
+                try {
+                  execSync(`taskkill /F /PID ${pid}`, { encoding: 'utf-8' });
+                  killedChrome++;
+                  console.log(`🧹 ゾンビChrome kill: PID ${pid}（${Math.round(elapsed / 1000)}秒経過）`);
+                } catch (_) {}
+              }
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    // ── 2. puppeteer_dev_profile 残留ディレクトリを削除 ──────────────
+    try {
+      const baseTempDir = path.dirname(process.env.TEMP || os.tmpdir());
+      const tempDirs = [baseTempDir];
+      try {
+        for (const entry of fs.readdirSync(baseTempDir, { withFileTypes: true })) {
+          if (entry.isDirectory() && /^\d+$/.test(entry.name)) {
+            tempDirs.push(path.join(baseTempDir, entry.name));
+          }
+        }
+      } catch (_) {}
+
+      for (const tempDir of tempDirs) {
+        try {
+          for (const entry of fs.readdirSync(tempDir, { withFileTypes: true })) {
+            if (entry.isDirectory() && entry.name.startsWith('puppeteer_dev_')) {
+              try {
+                fs.rmSync(path.join(tempDir, entry.name), { recursive: true, force: true });
+                cleanedDirs++;
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    console.log(`🧹 ゾンビクリーンアップ完了: Chrome kill=${killedChrome}件, puppeteer_dev_profile 削除=${cleanedDirs}件`);
+  }
+
   async _cleanupOldProducts() {
     try {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -117,6 +192,11 @@ class ScrapingService {
   }
 
   async scrapeAllKeywords() {
+    if (this.isRunning) {
+      console.warn('⚠️ scrapeAllKeywords: 前回スキャンが進行中のためスキップ（重複起動防止）');
+      return { success: false, message: '前回スキャンが進行中' };
+    }
+
     this.isRunning = true;
     this.scanCount++;
 
@@ -129,6 +209,9 @@ class ScrapingService {
     runLog('============================================================');
 
     try {
+      // ゾンビChrome・残留userDataDirを先に一掃
+      await this._cleanupZombieBrowsers();
+
       // Yahoo!フリマの自動停止フラグをリセット（前回スキャンの状態を引き継がない）
       if (this.scrapers.yahoo_flea?.resetAbortState) {
         this.scrapers.yahoo_flea.resetAbortState();

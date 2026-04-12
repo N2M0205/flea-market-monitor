@@ -80,6 +80,20 @@ class YahooFleaScraper {
     }
   }
 
+  async _closeBrowser(browser, timeoutMs = 10000) {
+    try {
+      await Promise.race([
+        browser.close(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`browser.close() timed out (${timeoutMs}ms)`)), timeoutMs)
+        ),
+      ]);
+    } catch (err) {
+      console.error(`browser.close() failed/timeout, force killing: ${err.message}`);
+      this._forceCloseBrowser(browser);
+    }
+  }
+
   // ─────────────────────────────────────────────
   // ページ設定（Stealth + リクエストフィルタ）
   // ─────────────────────────────────────────────
@@ -136,14 +150,7 @@ class YahooFleaScraper {
 
       return [];
     } finally {
-      if (browser) {
-        try {
-          await browser.close();
-        } catch (closeErr) {
-          console.error('browser.close() failed, force killing:', closeErr.message);
-          this._forceCloseBrowser(browser);
-        }
-      }
+      if (browser) await this._closeBrowser(browser);
       if (poolAcquired) browserPool.release();
     }
   }
@@ -382,14 +389,7 @@ class YahooFleaScraper {
       console.error('❌ 商品詳細取得エラー:', error.message);
       return {};
     } finally {
-      if (browser) {
-        try {
-          await browser.close();
-        } catch (closeErr) {
-          console.error('browser.close() failed, force killing:', closeErr.message);
-          this._forceCloseBrowser(browser);
-        }
-      }
+      if (browser) await this._closeBrowser(browser);
       if (poolAcquired) browserPool.release();
     }
   }
