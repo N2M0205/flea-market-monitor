@@ -68,6 +68,13 @@ function layerAFilter(product, keyword, config) {
     return { pass: false, reason: `下限価格未満 (¥${price} < ¥${minPrice})`, expiryMonths: null, hoursOld: 0 };
   }
 
+  // ─── 条件1.5: 上限価格 ───
+  const maxPrice = Number(keyword?.max_price) || 0;
+  if (maxPrice > 0 && price > maxPrice) {
+    console.log(`  🚫 上限価格超過: ¥${price} > ¥${maxPrice} [${product.title}]`);
+    return { pass: false, reason: `上限価格超過 (¥${price} > ¥${maxPrice})`, expiryMonths: null, hoursOld: 0 };
+  }
+
   // ─── 条件2: 出品者評価 ───
   const rating    = parseSellerRating(product);
   const minRating = config.layer_a_min_rating;

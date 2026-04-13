@@ -118,7 +118,8 @@ class MercariPuppeteerScraper {
   }
 
   async _searchInternal(page, keyword, options = {}) {
-    const { minPrice = null, maxPrice = null, limit = 20 } = options;
+    const { min_price: minPrice = null, max_price: maxPrice = null, limit = 20 } = options;
+    console.log('Mercari価格フィルタ:', { minPrice, maxPrice });
     const results = [];
 
     try {
