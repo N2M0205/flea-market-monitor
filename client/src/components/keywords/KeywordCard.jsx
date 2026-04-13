@@ -52,9 +52,21 @@ export default function KeywordCard({ keyword, onEdit, onDelete }) {
   };
 
   // platforms を JSON からパース
-  const platforms = typeof keyword.platforms === 'string' 
-    ? JSON.parse(keyword.platforms) 
+  const platforms = typeof keyword.platforms === 'string'
+    ? JSON.parse(keyword.platforms)
     : keyword.platforms || [];
+
+  // platformsが文字列の場合は配列に変換
+  // パターン1: 配列 → そのまま
+  // パターン2: 文字列 → カンマ区切り分割
+  // パターン3: {mercari:true, ...} オブジェクト → trueのキーのみ抽出
+  const platformList = Array.isArray(platforms)
+    ? platforms
+    : (typeof platforms === 'string'
+        ? platforms.split(',').filter(Boolean)
+        : (platforms && typeof platforms === 'object'
+            ? Object.keys(platforms).filter(k => platforms[k])
+            : []));
 
   return (
     <Card>
@@ -103,7 +115,7 @@ export default function KeywordCard({ keyword, onEdit, onDelete }) {
 
         {/* プラットフォーム */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-          {platforms.map((platform) => (
+          {platformList.map((platform) => (
             <Chip
               key={platform}
               label={`${getPlatformIcon(platform)} ${getPlatformName(platform)}`}
