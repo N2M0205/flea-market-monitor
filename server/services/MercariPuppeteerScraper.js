@@ -254,6 +254,13 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
             // メルカリのalt属性は「〇〇のサムネイル」形式なのでサフィックスを除去
             title = title.replace(/のサムネイル$/, '').trim();
 
+            // SOLD / 売り切れ チェック
+            const soldEl = el.querySelector('[class*="sold" i], [class*="sticker" i]');
+            const elText = el.textContent || '';
+            const isSold = soldEl !== null ||
+                           elText.includes('売り切れ') ||
+                           elText.toUpperCase().includes('SOLD');
+
             // 出品時間テキスト取得（例: "1時間前", "3日前"）
             const timeEl = el.querySelector('[class*="created"], [class*="time"], [class*="updated"]');
             const timeText = timeEl?.textContent?.trim() || '';
@@ -264,10 +271,15 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
               price:    priceText.replace(/[^0-9]/g, ''),
               image:    imgs?.src || '',
               timeText,
+              isSold,
             };
           }).catch(() => null);
 
           if (!data || !data.url) continue;
+          if (data.isSold) {
+            console.log(`  ⏭️ SOLD商品をスキップ: ${data.title}`);
+            continue;
+          }
           const productId = data.url.split('/item/')[1]?.split('?')[0] || '';
           results.push({
             product_id: productId,

@@ -85,7 +85,11 @@ function layerAFilter(product, keyword, config) {
   // ─── 条件3: 出品経過時間 ───
   const hoursOld = calcHoursFromNow(product);
   const maxHours = config.layer_a_max_hours;
-  if (hoursOld !== null && hoursOld > maxHours) {
+  if (hoursOld === null) {
+    console.log(`  🚫 出品日時不明のためブロック: ${product.title}`);
+    return { pass: false, reason: '出品日時不明', expiryMonths: null, hoursOld: 0 };
+  }
+  if (hoursOld > maxHours) {
     return { pass: false, reason: `出品経過時間超過 (${hoursOld.toFixed(1)}h > ${maxHours}h)`, expiryMonths: null, hoursOld };
   }
 

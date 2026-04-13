@@ -245,8 +245,14 @@ class YahooFleaScraper {
               if (maxPrice && priceNum > maxPrice) continue;
 
               const url = link.href || '';
+
+              // data-cl-params から出品時刻（stm = Unix秒）を取得
+              const dataClParams = link.getAttribute('data-cl-params') || '';
+              const stmMatch = dataClParams.match(/stm=(\d+)/);
+              const stm = stmMatch ? parseInt(stmMatch[1]) : null;
+
               if (productId && title && price !== '0' && url) {
-                items.push({ product_id: productId, title, price, url, image_url: imageUrl });
+                items.push({ product_id: productId, title, price, url, image_url: imageUrl, stm });
               }
             } catch (e) {
               // skip individual item errors
@@ -312,6 +318,11 @@ class YahooFleaScraper {
                 if (minPrice && priceNum < minPrice) continue;
                 if (maxPrice && priceNum > maxPrice) continue;
 
+                // data-cl-params から出品時刻（stm = Unix秒）を取得
+                const dataClParams2 = link.getAttribute('data-cl-params') || '';
+                const stmMatch2 = dataClParams2.match(/stm=(\d+)/);
+                const stm2 = stmMatch2 ? parseInt(stmMatch2[1]) : null;
+
                 if (productId && title && price !== '0') {
                   items.push({
                     product_id: productId,
@@ -319,6 +330,7 @@ class YahooFleaScraper {
                     price,
                     url: link.href,
                     image_url: img.src || '',
+                    stm: stm2,
                   });
                 }
               } catch (e) {
@@ -347,7 +359,7 @@ class YahooFleaScraper {
         condition:    null,
         seller_id:    null,
         free_shipping: null,
-        listed_at:    new Date(),
+        listed_at:    p.stm ? new Date(p.stm * 1000) : null,
       }));
 
       console.log(`✅ Yahoo!フリマ: ${formatted.length}件整形完了`);
