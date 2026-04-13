@@ -338,21 +338,21 @@ class ScrapingService {
     // ③ DB保存（新規のみ）
     const newProducts = [];
     for (const item of filteredProducts) {
-      const exists = await Product.findOne({
-        where: { platform, product_id: item.product_id },
+      const [saved, created] = await Product.findOrCreate({
+        where: {
+          keyword_id: keyword.id,
+          product_id: item.product_id,
+        },
+        defaults: {
+          platform,
+          title:     item.title,
+          price:     item.price,
+          url:       item.url,
+          image_url: item.image_url,
+        },
       });
-      if (exists) continue;
+      if (!created) continue;
 
-      const saved = await Product.create({
-        keyword_id:  keyword.id,
-        platform,
-        product_id:  item.product_id,
-        title:       item.title,
-        price:       item.price,
-        url:         item.url,
-        image_url:   item.image_url,
-        is_notified: false,
-      });
       newProducts.push({ ...saved.toJSON(), description: item.description || '' });
       console.log(`  ✨ 新規商品: "${item.title}" (¥${item.price})`);
       runLog(`  ✨ 新着 [${keyword.keyword}/${platform}]: "${item.title}" ¥${item.price}`);
