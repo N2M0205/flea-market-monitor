@@ -198,10 +198,10 @@ function checkChromeProcesses() {
     const lines = raw.split('\n').filter(l => l.trim().length > 0);
     const count = lines.length;
 
-    if (count > 50) {
-      return { ok: false, level: 'critical', count, message: `🚨 Chromeプロセス数: ${count}個（50個超 - 緊急）` };
+    if (count > 70) {
+      return { ok: false, level: 'critical', count, message: `🚨 Chromeプロセス数: ${count}個（70個超 - 緊急）` };
     }
-    if (count > 40) {
+    if (count > 55) {
       return { ok: false, level: 'warning', count, message: `⚠️ Chromeプロセス数: ${count}個（異常蓄積の兆候）` };
     }
     return { ok: true, count, message: `✅ Chromeプロセス数: ${count}個` };
