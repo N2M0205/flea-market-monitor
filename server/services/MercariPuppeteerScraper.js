@@ -194,13 +194,21 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       });
 
       // ── パターン1: data-testid="item-cell" ─────────────────────
+      let patternNum = 1;
       let items = await page.$$('[data-testid="item-cell"]').catch(() => []);
       console.log(`🔍 パターン1 [item-cell]: ${items.length}件`);
 
-      // ── パターン2: .merItemThumbnail (CSSクラス) ──────────────────
+      // ── パターン2: li[data-testid] (item-cellフォールバック) ──────────────────
+      // .merItemThumbnailは消滅済み。li[data-testid]はitem-cell以外のliも含みうるが
+      // evaluate()内でa[href*="/item/"]がなければurl=''となり自動スキップされる
       if (!items.length) {
-        items = await page.$$('.merItemThumbnail').catch(() => []);
-        console.log(`🔍 パターン2 [.merItemThumbnail]: ${items.length}件`);
+        patternNum = 2;
+        items = await page.$$('li[data-testid]').catch(() => []);
+        console.log(`🔍 パターン2 [li[data-testid]]: ${items.length}件`);
+      }
+
+      if (items.length) {
+        console.log(`📍 Mercari検索: パターン${patternNum}で${items.length}件取得 [${keyword}]`);
       }
 
       // ── パターン3: a[href*="/item/"] ───────────────────────────
@@ -249,10 +257,23 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
             const priceEl   = el.querySelector('[class*="price"], [class*="Price"], mer-price');
             const priceText = priceEl?.textContent || '';
 
-            // タイトル取得: img.alt → name/title要素 → テキスト
-            let title = imgs?.alt || el.querySelector('[class*="name"],[class*="title"]')?.textContent?.trim() || '';
-            // メルカリのalt属性は「〇〇のサムネイル」形式なのでサフィックスを除去
-            title = title.replace(/のサムネイル$/, '').trim();
+            // タイトル取得優先順位:
+            // 1. [data-testid="thumbnail-item-name"] (最もクリーン)
+            // 2. [role="img"][aria-label] から「〇〇の画像 X,XXX円」パターンで抽出
+            // 3. img.alt → /のサムネイル$/ 除去（フォールバック）
+            let title = '';
+            const nameEl = el.querySelector('[data-testid="thumbnail-item-name"]');
+            if (nameEl) {
+              title = nameEl.textContent?.trim() || '';
+            }
+            if (!title) {
+              const ariaLabel = el.querySelector('[role="img"][aria-label]')?.getAttribute('aria-label') || '';
+              const ariaMatch = ariaLabel.match(/^(.+?)(?:の画像|のサムネイル)/);
+              if (ariaMatch) title = ariaMatch[1].trim();
+            }
+            if (!title) {
+              title = imgs?.alt?.replace(/のサムネイル$/, '').trim() || '';
+            }
 
             // SOLD / 売り切れ チェック
             const soldEl = el.querySelector('[class*="sold" i], [class*="sticker" i]');
