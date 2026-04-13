@@ -57,7 +57,7 @@ const MAIN_KEYBOARD = {
     keyboard: [
       [{ text: '📋 一覧' }, { text: '➕ 追加' }],
       [{ text: '🗑 削除' }, { text: '🚫 除外設定' }],
-      [{ text: '📊 ステータス' }]
+      [{ text: '💰 価格設定' }, { text: '📊 ステータス' }]
     ],
     resize_keyboard: true,
     persistent: true
@@ -93,11 +93,14 @@ function formatKeyword(kw, index) {
   const minPrice = kw.min_price !== null && parseFloat(kw.min_price) > 0
     ? `¥${parseInt(kw.min_price).toLocaleString()}`
     : 'なし';
+  const maxPrice = kw.max_price !== null && parseFloat(kw.max_price) > 0
+    ? `¥${parseInt(kw.max_price).toLocaleString()}`
+    : 'なし';
   const sku = kw.crossmall_item_code || 'なし';
   const excludes = kw.exclude_keywords
     ? kw.exclude_keywords.split(',').map(s => s.trim()).filter(Boolean).join(', ')
     : 'なし';
-  return `${index + 1}. ${kw.keyword}\n   SKU: ${sku} | 最低: ${minPrice}\n   除外: ${excludes}`;
+  return `${index + 1}. ${kw.keyword}\n   SKU: ${sku} | 最低: ${minPrice} | 上限: ${maxPrice}\n   除外: ${excludes}`;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -157,6 +160,11 @@ bot.on('message', async (msg) => {
     await handleExcludeStart(chatId);
     return;
   }
+  if (text === '💰 価格設定') {
+    userStates.delete(userId);
+    await handlePriceStart(chatId);
+    return;
+  }
   if (text === '📊 ステータス') {
     userStates.delete(userId);
     await handleStatus(chatId);
@@ -194,7 +202,15 @@ bot.on('callback_query', async (query) => {
     });
 
   } else if (data === 'skip_price') {
-    userStates.set(userId, { ...state, price: null, step: 'add_confirm' });
+    userStates.set(userId, { ...state, price: null, step: 'add_max_price' });
+    await bot.sendMessage(chatId, '上限価格を入力してください（例: 5000）\nこの価格を超える出品は通知されません', {
+      reply_markup: {
+        inline_keyboard: [[{ text: '⏭ スキップ（制限なし）', callback_data: 'skip_max_price' }]]
+      }
+    });
+
+  } else if (data === 'skip_max_price') {
+    userStates.set(userId, { ...state, max_price: null, step: 'add_confirm' });
     await showAddConfirm(chatId, userId);
 
   } else if (data === 'add_confirm') {
@@ -218,6 +234,45 @@ bot.on('callback_query', async (query) => {
     const kwId = data.slice('exclude_clear_'.length);
     userStates.delete(userId);
     await handleExcludeClear(chatId, kwId);
+
+  // ─── 価格設定フロー ───
+  } else if (data.startsWith('setprice_')) {
+    const kwId = data.slice('setprice_'.length);
+    await handleSetPriceSelect(chatId, userId, kwId);
+
+  } else if (data.startsWith('editmin_')) {
+    const kwId = data.slice('editmin_'.length);
+    userStates.set(userId, { step: 'edit_price', editTarget: 'min_price', keywordId: kwId });
+    await bot.sendMessage(chatId, '新しい最低価格を入力してください（例: 1500）', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🗑 削除（制限なし）', callback_data: `clearprice_min_${kwId}` }],
+          [{ text: '❌ キャンセル', callback_data: 'cancel' }]
+        ]
+      }
+    });
+
+  } else if (data.startsWith('editmax_')) {
+    const kwId = data.slice('editmax_'.length);
+    userStates.set(userId, { step: 'edit_price', editTarget: 'max_price', keywordId: kwId });
+    await bot.sendMessage(chatId, '新しい上限価格を入力してください（例: 5000）', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🗑 削除（制限なし）', callback_data: `clearprice_max_${kwId}` }],
+          [{ text: '❌ キャンセル', callback_data: 'cancel' }]
+        ]
+      }
+    });
+
+  } else if (data.startsWith('clearprice_min_')) {
+    const kwId = data.slice('clearprice_min_'.length);
+    userStates.delete(userId);
+    await handleClearPrice(chatId, kwId, 'min_price');
+
+  } else if (data.startsWith('clearprice_max_')) {
+    const kwId = data.slice('clearprice_max_'.length);
+    userStates.delete(userId);
+    await handleClearPrice(chatId, kwId, 'max_price');
 
   // ─── 汎用キャンセル ───
   } else if (data === 'cancel') {
@@ -285,17 +340,38 @@ async function handleStateFlow(chatId, userId, text, state) {
       });
       return;
     }
-    userStates.set(userId, { ...state, price, step: 'add_confirm' });
+    userStates.set(userId, { ...state, price, step: 'add_max_price' });
+    await bot.sendMessage(chatId, '上限価格を入力してください（例: 5000）\nこの価格を超える出品は通知されません', {
+      reply_markup: {
+        inline_keyboard: [[{ text: '⏭ スキップ（制限なし）', callback_data: 'skip_max_price' }]]
+      }
+    });
+
+  } else if (state.step === 'add_max_price') {
+    const maxPrice = parseInt(text, 10);
+    if (isNaN(maxPrice) || maxPrice < 0) {
+      await bot.sendMessage(chatId, '数値を入力してください（例: 5000）', {
+        reply_markup: {
+          inline_keyboard: [[{ text: '⏭ スキップ（制限なし）', callback_data: 'skip_max_price' }]]
+        }
+      });
+      return;
+    }
+    userStates.set(userId, { ...state, max_price: maxPrice, step: 'add_confirm' });
     await showAddConfirm(chatId, userId);
 
   } else if (state.step === 'exclude_input') {
     await handleExcludeInput(chatId, userId, text, state);
+
+  } else if (state.step === 'edit_price') {
+    await handleEditPriceInput(chatId, userId, text, state);
   }
 }
 
 async function showAddConfirm(chatId, userId) {
   const state = userStates.get(userId);
   const priceText = state.price != null ? `¥${state.price.toLocaleString()}` : 'なし';
+  const maxPriceText = state.max_price != null ? `¥${state.max_price.toLocaleString()}` : 'なし';
   const skuText = state.sku || 'なし';
 
   const confirmText =
@@ -303,6 +379,7 @@ async function showAddConfirm(chatId, userId) {
     `キーワード: ${state.keyword}\n` +
     `商品コード: ${skuText}\n` +
     `最低価格: ${priceText}\n` +
+    `上限価格: ${maxPriceText}\n` +
     `監視: メルカリ + Yahoo`;
 
   await bot.sendMessage(chatId, confirmText, {
@@ -336,6 +413,7 @@ async function handleAddConfirm(chatId, userId) {
       keyword: state.keyword,
       crossmall_item_code: state.sku || null,
       min_price: state.price != null ? state.price : null,
+      max_price: state.max_price != null ? state.max_price : null,
       platforms: { mercari: true, yahoo_flea: true, rakuma: false, yahoo_auction: false },
       is_active: true
     });
@@ -512,6 +590,112 @@ async function handleExcludeClear(chatId, kwId) {
     await replyWithKeyboard(chatId, `✅ 「${kw.keyword}」の除外キーワードをクリアしました`);
   } catch (err) {
     console.error('[telegram-bot] 除外クリアエラー:', err.message);
+    await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 💰 価格設定フロー
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function handlePriceStart(chatId) {
+  try {
+    const keywords = await Keyword.findAll({
+      where: { is_active: true },
+      order: [['created_at', 'ASC']]
+    });
+
+    if (keywords.length === 0) {
+      await replyWithKeyboard(chatId, '登録されているキーワードはありません');
+      return;
+    }
+
+    const buttons = keywords.map(kw => [
+      { text: kw.keyword, callback_data: `setprice_${kw.id}` }
+    ]);
+    buttons.push([{ text: '❌ キャンセル', callback_data: 'cancel' }]);
+
+    await bot.sendMessage(chatId, '価格設定するキーワードを選択してください:', {
+      reply_markup: { inline_keyboard: buttons }
+    });
+  } catch (err) {
+    console.error('[telegram-bot] 価格設定一覧エラー:', err.message);
+    await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
+  }
+}
+
+async function handleSetPriceSelect(chatId, userId, kwId) {
+  try {
+    const kw = await Keyword.findByPk(kwId);
+    if (!kw) {
+      await replyWithKeyboard(chatId, '❌ キーワードが見つかりません');
+      return;
+    }
+
+    const minText = kw.min_price != null && parseFloat(kw.min_price) > 0
+      ? `¥${parseInt(kw.min_price).toLocaleString()}`
+      : 'なし';
+    const maxText = kw.max_price != null && parseFloat(kw.max_price) > 0
+      ? `¥${parseInt(kw.max_price).toLocaleString()}`
+      : 'なし';
+
+    await bot.sendMessage(
+      chatId,
+      `💰 「${kw.keyword}」の現在の価格設定\n最低価格: ${minText}\n上限価格: ${maxText}\n\n変更する項目を選択してください:`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📉 最低価格を変更', callback_data: `editmin_${kwId}` }],
+            [{ text: '📈 上限価格を変更', callback_data: `editmax_${kwId}` }],
+            [{ text: '❌ キャンセル', callback_data: 'cancel' }]
+          ]
+        }
+      }
+    );
+  } catch (err) {
+    console.error('[telegram-bot] 価格設定選択エラー:', err.message);
+    await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
+  }
+}
+
+async function handleEditPriceInput(chatId, userId, text, state) {
+  userStates.delete(userId);
+  try {
+    const kw = await Keyword.findByPk(state.keywordId);
+    if (!kw) {
+      await replyWithKeyboard(chatId, '❌ キーワードが見つかりません');
+      return;
+    }
+
+    const newPrice = parseInt(text, 10);
+    if (isNaN(newPrice) || newPrice < 0) {
+      await replyWithKeyboard(chatId, '❌ 数値を入力してください（例: 1500）');
+      return;
+    }
+
+    const label = state.editTarget === 'min_price' ? '最低価格' : '上限価格';
+    await kw.update({ [state.editTarget]: newPrice });
+    await replyWithKeyboard(
+      chatId,
+      `✅ 「${kw.keyword}」の${label}を ¥${newPrice.toLocaleString()} に更新しました`
+    );
+  } catch (err) {
+    console.error('[telegram-bot] 価格入力エラー:', err.message);
+    await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
+  }
+}
+
+async function handleClearPrice(chatId, kwId, field) {
+  try {
+    const kw = await Keyword.findByPk(kwId);
+    if (!kw) {
+      await replyWithKeyboard(chatId, '❌ キーワードが見つかりません');
+      return;
+    }
+    const label = field === 'min_price' ? '最低価格' : '上限価格';
+    await kw.update({ [field]: null });
+    await replyWithKeyboard(chatId, `✅ 「${kw.keyword}」の${label}を削除しました（制限なし）`);
+  } catch (err) {
+    console.error('[telegram-bot] 価格削除エラー:', err.message);
     await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
   }
 }
