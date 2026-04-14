@@ -2,6 +2,12 @@ const app = require('./app');
 const db = require('./models');
 const schedulerService = require('./services/SchedulerService');
 
+// browser.close() タイムアウト等の unhandled rejection でクラッシュしないようにする
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Unhandled Rejection:', reason?.message || reason);
+  // クラッシュさせない（ログだけ出す）
+});
+
 const PORT = process.env.PORT || 3001;
 
 // データベース接続とサーバー起動

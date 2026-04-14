@@ -69,18 +69,23 @@ class YahooFleaScraper {
   }
 
   _forceCloseBrowser(browser) {
+    let pid;
     try {
-      const pid = browser.process()?.pid;
-      if (pid) {
+      pid = browser.process()?.pid;
+    } catch (pidErr) {
+      console.error('Failed to get browser PID:', pidErr.message);
+    }
+    if (pid) {
+      try {
         process.kill(pid, 'SIGKILL');
         console.log(`Force killed browser process PID: ${pid}`);
+      } catch (killErr) {
+        console.error('Force kill also failed:', killErr.message);
       }
-    } catch (killErr) {
-      console.error('Force kill also failed:', killErr.message);
     }
   }
 
-  async _closeBrowser(browser, timeoutMs = 10000) {
+  async _closeBrowser(browser, timeoutMs = 5000) {
     try {
       await Promise.race([
         browser.close(),
