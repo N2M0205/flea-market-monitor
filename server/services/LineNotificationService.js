@@ -163,10 +163,15 @@ class LineNotificationService {
     // 送料・利益見込み計算
     const deliveryType  = crossmallInfo?.deliveryType || master?.deliveryType || '';
     const shippingCost  = getShippingCost(deliveryType);
-    // 上限仕入: キャッシュ値(GAS由来で陳腐化)ではなく現在の直近販売価格から動的計算
-    const purchaseLimit = lastSalePrice != null
-      ? Math.round(lastSalePrice * 0.9 - shippingCost)
-      : null;
+    // 上限仕入: 3000円以下は300円固定利益、3000円超は利益率12%確保
+    let purchaseLimit = null;
+    if (lastSalePrice != null) {
+      if (lastSalePrice <= 3000) {
+        purchaseLimit = Math.round(lastSalePrice * 0.9 - shippingCost - 300);
+      } else {
+        purchaseLimit = Math.round(lastSalePrice * 0.78 - shippingCost);
+      }
+    }
 
     let profitLine = '';
     if (lastSalePrice != null && price > 0) {
