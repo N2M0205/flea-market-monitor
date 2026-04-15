@@ -26,9 +26,13 @@ class InventoryAlertService {
 
   /**
    * メイン: 全対象SKUの在庫アラート結果を生成
+   * @param {Object} options
+   * @param {boolean} options.skipRecommendations - true でフリマ推奨生成をスキップ（DB不要）
    * @returns {{ alerts: Array, summary: Object, recommendations: Array }}
    */
-  async generateAlert() {
+  async generateAlert(options = {}) {
+    const { skipRecommendations = false } = options;
+
     const state = this._loadState();
     const { cacheMap, salesMap } = this._loadData();
 
@@ -42,28 +46,53 @@ class InventoryAlertService {
       alerts.push(this._analyzeSKU(sku, stockInfo, salesRecords, state, now));
     }
 
-    // 重要度順ソート
-    const levelOrder = [
-      'critical_accelerating', 'out_of_stock', 'critical',
-      'warning', 'price_review', 'dead_stock', 'ok',
-    ];
-    alerts.sort((a, b) => {
-      const diff = levelOrder.indexOf(a.level) - levelOrder.indexOf(b.level);
-      if (diff !== 0) return diff;
-      return (a.effectiveRemainingDays ?? 999) - (b.effectiveRemainingDays ?? 999);
-    });
-
+    this._sortAlerts(alerts);
     this._saveState(alerts, state);
 
     const summary = this._buildSummary(alerts);
     let recommendations = [];
-    try {
-      recommendations = await this._generateRecommendations(alerts);
-    } catch (err) {
-      console.warn('フリマ推奨生成スキップ:', err.message);
+    if (!skipRecommendations) {
+      try {
+        recommendations = await this._generateRecommendations(alerts);
+      } catch (err) {
+        console.warn('フリマ推奨生成スキップ:', err.message);
+      }
     }
 
     return { alerts, summary, recommendations };
+  }
+
+  /**
+   * sync完了後のアラートチェック（急減 + 2時間チェック）
+   * - DB不要（skipRecommendations 相当）
+   * - syncStock()直後に呼ぶこと（previousStock更新前のstateを使って急減判定）
+   * @returns {{ suddenDrops: Array, twoHourAlerts: Array, shouldSendTwoHour: boolean }}
+   */
+  runSyncAlertCheck() {
+    const state = this._loadState();
+    const { cacheMap, salesMap } = this._loadData();
+    const targetSKUs = this._getTargetSKUs(cacheMap, salesMap);
+    const now = new Date();
+
+    const alerts = [];
+    for (const sku of targetSKUs) {
+      const stockInfo = cacheMap.get(sku) || null;
+      const salesRecords = salesMap.get(sku) || [];
+      alerts.push(this._analyzeSKU(sku, stockInfo, salesRecords, state, now));
+    }
+
+    this._sortAlerts(alerts);
+
+    // 急減チェック（previousStock上書き前に判定）
+    const suddenDrops = this._detectSuddenDrops(alerts, state, now);
+
+    // 2時間チェック（🔴/⚫ SKUリストが前回と異なる場合のみ送信）
+    const { shouldSend: shouldSendTwoHour, twoHourAlerts } = this._checkTwoHourAlert(alerts, state);
+
+    // 状態を保存（previousStock更新 + lastTwoHourCheckSkus更新 + lastAlertSent更新）
+    this._saveSyncState(alerts, suddenDrops, shouldSendTwoHour ? twoHourAlerts : null, state, now);
+
+    return { suddenDrops, twoHourAlerts, shouldSendTwoHour };
   }
 
   // ─────────────────────────────────────────────
@@ -99,6 +128,26 @@ class InventoryAlertService {
     return { lastUpdated: null, outOfStockSince: {}, previousStock: {}, lastAlertSent: {} };
   }
 
+  // ─────────────────────────────────────────────
+  // ソート
+  // ─────────────────────────────────────────────
+
+  _sortAlerts(alerts) {
+    const levelOrder = [
+      'critical_accelerating', 'out_of_stock', 'critical',
+      'warning', 'price_review', 'dead_stock', 'ok',
+    ];
+    alerts.sort((a, b) => {
+      const diff = levelOrder.indexOf(a.level) - levelOrder.indexOf(b.level);
+      if (diff !== 0) return diff;
+      return (a.effectiveRemainingDays ?? 999) - (b.effectiveRemainingDays ?? 999);
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  // Phase 1: 毎朝サマリー用 状態保存
+  // ─────────────────────────────────────────────
+
   _saveState(alerts, prevState) {
     const outOfStockSince = { ...(prevState.outOfStockSince || {}) };
     const previousStock = {};
@@ -119,9 +168,116 @@ class InventoryAlertService {
         outOfStockSince,
         previousStock,
         lastAlertSent: prevState.lastAlertSent || {},
+        lastTwoHourCheckSkus: prevState.lastTwoHourCheckSkus || [],
       }, null, 2), 'utf8');
     } catch (err) {
       console.error('状態保存失敗:', err.message);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Phase 2: sync用 急減チェック・2時間チェック・状態保存
+  // ─────────────────────────────────────────────
+
+  /**
+   * 急減チェック
+   * 条件: previousStock比50%以上減少 かつ 有効残日数4日以下 かつ 24時間以内に未送信
+   */
+  _detectSuddenDrops(alerts, state, now) {
+    const prev = state.previousStock || {};
+    const lastSent = state.lastAlertSent || {};
+    const drops = [];
+
+    for (const a of alerts) {
+      const prevStock = prev[a.sku];
+      // 初回・元々0・増加は除外
+      if (prevStock === undefined || prevStock === 0) continue;
+      if (a.stock >= prevStock) continue;
+
+      const dropRatio = (prevStock - a.stock) / prevStock;
+      if (dropRatio < 0.5) continue;
+
+      // 有効残4日以下チェック
+      if (!isFinite(a.effectiveRemainingDays) || a.effectiveRemainingDays > 4) continue;
+
+      // 24時間制御
+      const lastSentMs = lastSent[a.sku] ? new Date(lastSent[a.sku]).getTime() : 0;
+      if (now.getTime() - lastSentMs < 24 * 60 * 60 * 1000) continue;
+
+      drops.push({
+        sku: a.sku,
+        itemName: a.itemName,
+        prevStock,
+        currentStock: a.stock,
+        dropPercent: Math.round(dropRatio * 100),
+        effectiveRemainingDays: a.effectiveRemainingDays,
+        trend: a.trend,
+      });
+    }
+
+    return drops;
+  }
+
+  /**
+   * 2時間チェック（🔴/⚫ があり、前回送信時からSKU構成が変わった場合に送信）
+   * @returns {{ shouldSend: boolean, twoHourAlerts: Array }}
+   */
+  _checkTwoHourAlert(alerts, state) {
+    const twoHourAlerts = alerts.filter(
+      a => a.level === 'critical_accelerating'
+        || a.level === 'critical'
+        || a.level === 'out_of_stock'
+    );
+
+    if (twoHourAlerts.length === 0) {
+      return { shouldSend: false, twoHourAlerts: [] };
+    }
+
+    // A案: SKUリスト完全一致なら送信しない
+    const currentSkus = twoHourAlerts.map(a => a.sku).sort().join(',');
+    const prevSkus = [...(state.lastTwoHourCheckSkus || [])].sort().join(',');
+
+    return { shouldSend: currentSkus !== prevSkus, twoHourAlerts };
+  }
+
+  /**
+   * sync後の状態保存
+   * - previousStock を現在値で更新（確認1: syncごとに更新）
+   * - lastAlertSent を急減送信分で更新
+   * - lastTwoHourCheckSkus を送信した場合に更新
+   */
+  _saveSyncState(alerts, suddenDrops, sentTwoHourAlerts, prevState, now) {
+    const outOfStockSince = { ...(prevState.outOfStockSince || {}) };
+    const previousStock = {};
+
+    for (const a of alerts) {
+      previousStock[a.sku] = a.stock;
+      if (a.level === 'out_of_stock') {
+        if (!outOfStockSince[a.sku]) outOfStockSince[a.sku] = now.toISOString();
+      } else {
+        delete outOfStockSince[a.sku];
+      }
+    }
+
+    const lastAlertSent = { ...(prevState.lastAlertSent || {}) };
+    for (const d of suddenDrops) {
+      lastAlertSent[d.sku] = now.toISOString();
+    }
+
+    const lastTwoHourCheckSkus = sentTwoHourAlerts
+      ? sentTwoHourAlerts.map(a => a.sku).sort()
+      : (prevState.lastTwoHourCheckSkus || []);
+
+    try {
+      fs.writeFileSync(STATE_FILE, JSON.stringify({
+        lastUpdated: now.toISOString(),
+        outOfStockSince,
+        previousStock,
+        lastAlertSent,
+        lastTwoHourCheckSkus,
+      }, null, 2), 'utf8');
+    } catch (err) {
+      console.error('sync状態保存失敗:', err.message);
     }
   }
 

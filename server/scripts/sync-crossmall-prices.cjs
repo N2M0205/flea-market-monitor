@@ -326,10 +326,141 @@ async function notifyCacheReload() {
   }
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 2: 在庫アラートチェック（syncStock後に実行）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const LINE_TOKEN   = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const TG_TOKEN     = process.env.TELEGRAM_BOT_TOKEN;
+const TG_ADMIN_ID  = process.env.TELEGRAM_ADMIN_ID;
+
+async function sendLine(text) {
+  if (!LINE_TOKEN) { console.warn('[ALERT] LINE_TOKEN未設定'); return; }
+  try {
+    const res = await fetch('https://api.line.me/v2/bot/message/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${LINE_TOKEN}` },
+      body: JSON.stringify({ messages: [{ type: 'text', text }] }),
+    });
+    if (!res.ok) console.error(`[ALERT] LINE送信失敗 (${res.status}): ${await res.text()}`);
+    else console.log('[ALERT] LINE broadcast 送信完了');
+  } catch (err) {
+    console.error('[ALERT] LINE送信エラー:', err.message);
+  }
+}
+
+async function sendTelegram(text) {
+  if (!TG_TOKEN || !TG_ADMIN_ID) { console.warn('[ALERT] Telegram設定未完了'); return; }
+  // 4096文字制限: 行単位で分割
+  const chunks = [];
+  let cur = '';
+  for (const line of text.split('\n')) {
+    const next = cur ? cur + '\n' + line : line;
+    if (next.length > 4096) { if (cur) chunks.push(cur.trim()); cur = line; }
+    else cur = next;
+  }
+  if (cur) chunks.push(cur.trim());
+
+  for (const chunk of chunks) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: TG_ADMIN_ID, text: chunk }),
+      });
+      if (!res.ok) console.error(`[ALERT] Telegram送信失敗 (${res.status}): ${await res.text()}`);
+      else console.log('[ALERT] Telegram送信完了');
+    } catch (err) {
+      console.error('[ALERT] Telegram送信エラー:', err.message);
+    }
+  }
+}
+
+function trendLabel(t) {
+  return { accelerating: '📈加速', stable: '➡️安定', decelerating: '📉減速', new_surge: '⚡急伸', unknown: '⏸不明' }[t] ?? t;
+}
+
+/** 急減アラートのメッセージ生成 */
+function buildSuddenDropMessage(drops) {
+  const lines = ['🚨 在庫急減アラート'];
+  for (const d of drops) {
+    lines.push(`${d.itemName}: ${d.prevStock}個→${d.currentStock}個（-${d.dropPercent}%）`);
+    const rem = isFinite(d.effectiveRemainingDays)
+      ? `有効残${d.effectiveRemainingDays.toFixed(1)}日`
+      : '余裕あり';
+    lines.push(`  ${trendLabel(d.trend)} / ${rem}`);
+    if (d.effectiveRemainingDays <= 0) lines.push('  → 即発注推奨');
+  }
+  return lines.join('\n');
+}
+
+/** 2時間チェックのメッセージ生成 */
+function buildTwoHourMessage(twoHourAlerts) {
+  const now = new Date().toLocaleTimeString('ja-JP', {
+    timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit',
+  });
+  const criticals = twoHourAlerts.filter(
+    a => a.level === 'critical_accelerating' || a.level === 'critical'
+  );
+  const outOfStocks = twoHourAlerts.filter(a => a.level === 'out_of_stock');
+
+  const lines = [`⚠️ 在庫アラート（${now}更新）`];
+  lines.push(`🔴${criticals.length}件 ⚫${outOfStocks.length}件`);
+
+  for (const a of criticals) {
+    const rem = isFinite(a.effectiveRemainingDays)
+      ? `有効残${a.effectiveRemainingDays.toFixed(1)}日`
+      : '';
+    lines.push(`→ ${a.itemName} 残${a.stock}個(${rem})${trendLabel(a.trend)}`);
+  }
+  for (const a of outOfStocks) {
+    const rate = a.effectiveDailyRate28 > 0
+      ? `実力${a.effectiveDailyRate28.toFixed(1)}個/日`
+      : '低速';
+    lines.push(`→ ${a.itemName} 欠品(${rate})`);
+  }
+  return lines.join('\n');
+}
+
+/** syncStock後に呼ぶ在庫アラートチェック */
+async function runInventoryAlertCheck() {
+  console.log('\n[ALERT] 在庫アラートチェック開始');
+  const InventoryAlertService = require('../services/InventoryAlertService');
+  const service = new InventoryAlertService();
+
+  try {
+    const { suddenDrops, twoHourAlerts, shouldSendTwoHour } = service.runSyncAlertCheck();
+
+    // 急減アラート（LINE broadcast + Telegram）
+    if (suddenDrops.length > 0) {
+      console.log(`[ALERT] 急減検出: ${suddenDrops.length}件`);
+      const msg = buildSuddenDropMessage(suddenDrops);
+      await sendLine(msg);
+      await sendTelegram(msg);
+    } else {
+      console.log('[ALERT] 急減なし');
+    }
+
+    // 2時間チェック（Telegramのみ・変化時のみ）
+    if (shouldSendTwoHour) {
+      console.log(`[ALERT] 2時間チェック送信: 🔴+⚫ ${twoHourAlerts.length}件（前回から変化あり）`);
+      const msg = buildTwoHourMessage(twoHourAlerts);
+      await sendTelegram(msg);
+    } else if (twoHourAlerts.length > 0) {
+      console.log(`[ALERT] 2時間チェックスキップ: 🔴+⚫ ${twoHourAlerts.length}件（前回と同一SKU構成）`);
+    } else {
+      console.log('[ALERT] 2時間チェック: 🔴/⚫ なし');
+    }
+  } catch (err) {
+    console.error('[ALERT] アラートチェックエラー:', err.message);
+  }
+}
+
 main()
   .then(async () => {
     const crossmall = new CrossmallService();
     await syncStock(crossmall);
+    await runInventoryAlertCheck();   // Phase 2: syncStock後に急減・2時間チェック
     await syncItemNames(crossmall);
     await notifyCacheReload();
     process.exit(0);
