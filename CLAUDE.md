@@ -53,6 +53,10 @@
 - purchase_master_cache.json の items は数値インデックスがキー。SKUは item.sku フィールドにある（Object.values()でループすること）
 - LINE broadcast は fetch直接方式（@line/bot-sdk不使用）。health-check.cjs の sendLineAlert() を参照
 - Telegram送信は4096文字制限あり。超える場合は行単位で分割送信が必要
+- 在庫アラート Phase 1(11f5bac) + Phase 2(172078e) 完了。毎朝8時サマリー + 2時間チェック + 急減アラート
+- previousStock は syncStock() 後に毎回更新（2時間ごとの比較が正しく機能する）
+- 2時間チェックのスキップ判定は SKUリスト完全一致方式（件数同じでも中身変化なら送信）
+- generateAlert({ skipRecommendations: true }) でDB不要の軽量実行が可能
 
 ## 既知の未解決課題
 1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
