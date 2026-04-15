@@ -32,13 +32,13 @@
 | プロセス | 種別 | 役割 |
 |---------|------|------|
 | picofuri-backend | 常時起動（500MB上限） | メインスクレイピング + API |
-| crossmall-sync | cron 0 */2 * * * | CROSSMALL同期 |
+| crossmall-sync | cron 0 */2 * * * | CROSSMALL同期 + 急減チェック + 2時間Telegram簡易レポート |
 | chrome-cleanup | cron */30 * * * * | Chrome/Tempクリーンアップ |
 | health-check | cron 0,30 * * * * | ヘルスチェック + LINE通知 |
 | db-cleanup | cron 0 3 * * * | DB 90日超レコード削除 |
 | pm2-logrotate | 常時 | ログローテーション |
-| telegram-bot | 常時起動（200MB上限） | Telegramキーワード管理 |
-| inventory-alert | cron 0 23 * * * | 毎朝8時在庫アラート（LINE broadcast + Telegram） |
+| telegram-bot | 常時起動（200MB上限） | Telegramキーワード管理 + 📦在庫ボタン（即時サマリー）+ 💡推奨→即追加 |
+| inventory-alert | cron 0 23 * * * | 毎朝8時在庫サマリー（LINE=スリム / Telegram=フル） |
 
 ## 重要な教訓（過去の障害から）
 - platformsフィールドは3形式ある（配列/JSON文字列/オブジェクト）→ parsePlatforms()で正規化すること
@@ -53,16 +53,23 @@
 - purchase_master_cache.json の items は数値インデックスがキー。SKUは item.sku フィールドにある（Object.values()でループすること）
 - LINE broadcast は fetch直接方式（@line/bot-sdk不使用）。health-check.cjs の sendLineAlert() を参照
 - Telegram送信は4096文字制限あり。超える場合は行単位で分割送信が必要
-- 在庫アラート Phase 1(11f5bac) + Phase 2(172078e) 完了。毎朝8時サマリー + 2時間チェック + 急減アラート
+- 在庫アラート Phase 1(11f5bac) + Phase 2(172078e) + Phase 3(e95991b) 完了
 - previousStock は syncStock() 後に毎回更新（2時間ごとの比較が正しく機能する）
 - 2時間チェックのスキップ判定は SKUリスト完全一致方式（件数同じでも中身変化なら送信）
 - generateAlert({ skipRecommendations: true }) でDB不要の軽量実行が可能
 - 毎朝サマリーに本日補充リスト追加済み(e95991b)。在庫日数30日以上はスキップ（在庫過多）。昨日判定はJST基準（_getYesterdayJST()）。generateAlert()戻り値にreplenishmentListが含まれる
+- LINE通知はスリム化済み（🔴即対応+⚫欠品+📦補充+📋集計のみ）。詳細はTelegramで確認
+- 上限仕入価格: ≤3000円は固定300円利益（×0.9-送料-300）、>3000円は利益率12%（×0.78-送料）
+- デフォルトリードタイム: 5日（process.env.DEFAULT_LEAD_TIME || '5'）
+- Telegram 📦在庫ボタン: telegram-bot.cjs で handleInventory() → generateAlert() → buildInventoryMessage() + sendRecommendations()
+- フリマ推奨の即追加: callback_data 'add:{sku}' → handleAddMonitor() → Keyword.create() + editMessageReplyMarkup でボタン更新
+- InlineKeyboard callback_data は64バイト制限。'add:{sku}' 形式で十分短い
+- telegram-bot.cjs の node_modules は server/ 配下（プロジェクトルートからは見えない）
 
 ## 既知の未解決課題
 1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
 2. メルカリセレクタのフォールバック強化（data-testid廃止リスク）
-3. 在庫アラート Phase 2 未実装（急減アラート・2時間チェック・通知疲れ防止）設計書: PICOFURI-DESIGN-INVENTORY-ALERT-V2.1.md
+3. 在庫アラート Phase 4（曜日パターン・セット品統合）未実装
 
 ## 役割分担
 - Claude（チャット）= 設計担当：方針決定・レビュー

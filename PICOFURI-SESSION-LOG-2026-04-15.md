@@ -72,3 +72,77 @@
 | Yahoo成功率 | 29/29（100%） |
 | 処理時間 | 336秒 |
 | キーワード数 | 29件 |
+
+---
+
+# ピコフリ開発セッションログ（続）
+> 日付: 2026-04-15（午後セッション）
+
+## 完了した作業
+
+### ✅ 6. 上限仕入価格の計算ロジック変更（価格帯別）
+ブランチ: fix/purchase-limit-formula → master (744a8cd)
+- ≤3000円: lastSalePrice × 0.9 - 送料 - 300（固定300円利益確保）
+- >3000円: lastSalePrice × 0.78 - 送料（利益率12%確保）
+- calcProfit()・通知フォーマット変更なし
+
+### ✅ 7. LINE通知スリム化
+ブランチ: fix/line-notification-slim → master (c845e42)
+- LINE = ダッシュボード形式（🔴即対応 全件 / ⚫欠品 上位5件 / 📦補充 上位10件 / 📋集計）
+- Telegram = 全情報維持（変更なし）
+- 削除: 🟡注意個別リスト / 💰価格見直し個別リスト / 💡フリマ推奨
+- 新規関数: fmtCriticalSlim / fmtOutOfStockSlim / fmtReplenishmentItemSlim / buildReplenishmentSectionLine
+- buildLineMessage から leadTime パラメータを除去
+
+### ✅ 8. Telegram📦在庫ボタン追加
+ブランチ: feat/telegram-inventory-button → master (2bd06a4)
+- MAIN_KEYBOARD 3行目に「📦 在庫」追加
+- handleInventory(): generateAlert() → buildInventoryMessage() → 4096文字分割送信
+- InventoryAlertService を起動時1回 require
+- フォーマット関数群を _ プレフィックスで telegram-bot.cjs 内にインライン実装
+
+### ✅ 9. フリマ推奨→即追加ボタン
+ブランチ: feat/telegram-recommend-add → master (3743eb0)
+- 推奨リストを InlineKeyboard 付き別メッセージで送信（buildInventoryMessage から分離）
+- callback_data: 'add:{sku}'（64バイト制限内）
+- handleAddMonitor(): 重複チェック → Keyword.create() → editMessageReplyMarkup でボタン更新
+- getItemNameFromCache(): purchase_master_cache.json から SKU→商品名取得（失敗時はSKUをフォールバック）
+- fs require 追加、INVENTORY_CACHE_FILE パス定数追加
+
+### ✅ 10. リードタイム5日に変更
+コミット: 2baac66 → master
+- InventoryAlertService.js: process.env.DEFAULT_LEAD_TIME || '3' → '5'
+
+## PM2プロセス構成（最終）
+| プロセス | 種別 | 役割 |
+|---------|------|------|
+| picofuri-backend | 常時起動 | メインスクレイピング + API |
+| crossmall-sync | cron 0 */2 * * * | CROSSMALL同期 + 急減チェック + 2時間Telegram |
+| chrome-cleanup | cron */30 * * * * | Chrome/Tempクリーンアップ |
+| health-check | cron 0,30 * * * * | ヘルスチェック + LINE broadcast |
+| db-cleanup | cron 0 3 * * * | DB 90日超レコード削除 |
+| pm2-logrotate | 常時 | ログローテーション |
+| telegram-bot | 常時起動 | Telegramキーワード管理 + 📦在庫 + 💡即追加 |
+| inventory-alert | cron 0 23 * * * | 毎朝8時在庫サマリー |
+
+## 未完了タスク
+### 🟡 中優先度
+1. メルカリセレクタのフォールバック強化
+2. LINE通知未着問題の調査
+3. 在庫アラート Phase 4（曜日パターン・セット品統合）
+
+### 🟢 低優先度
+4. 単価自動計算（商品名からの個数抽出）
+5. Linux VPSへの移行検討
+6. Cloudflare Tunnel導入
+7. iOSアプリ開発
+
+## 教訓
+- purchase_master_cache.jsonのitemsは数値インデックスがキー。SKUはitem.skuフィールド
+- get_stock APIはItemNameを返さない。商品名取得にはget_itemを使う
+- LINE broadcastはfetch直接方式（SDK不使用）
+- Telegram送信は4096文字制限あり、分割送信が必要
+- 在庫日数計算は28日/14日/7日の最短を採用（加速を見逃さない）
+- 欠品期間は販売ペース計算から除外すべき（実力日販の正確性）
+- telegram-bot.cjsの node_modules は server/ 配下（プロジェクトルートからは見えない）
+- InlineKeyboard callback_data は64バイト制限。'add:{sku}' 形式で十分
