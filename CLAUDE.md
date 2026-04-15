@@ -57,6 +57,7 @@
 - previousStock は syncStock() 後に毎回更新（2時間ごとの比較が正しく機能する）
 - 2時間チェックのスキップ判定は SKUリスト完全一致方式（件数同じでも中身変化なら送信）
 - generateAlert({ skipRecommendations: true }) でDB不要の軽量実行が可能
+- 毎朝サマリーに本日補充リスト追加済み(e95991b)。在庫日数30日以上はスキップ（在庫過多）。昨日判定はJST基準（_getYesterdayJST()）。generateAlert()戻り値にreplenishmentListが含まれる
 
 ## 既知の未解決課題
 1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
