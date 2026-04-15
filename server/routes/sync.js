@@ -1,6 +1,10 @@
 // server/routes/sync.js
 // GAS → VPS  仕入れマスタ同期エンドポイント
 //
+// ⚠️ 廃止(2026-04-15): GASはIP制限によりCROSSMALL APIを叩けないため停止中。
+//    syncedAt / item_name は crossmall-sync (sync-crossmall-prices.cjs) が更新する。
+//    このエンドポイント (POST /api/sync/purchase-master) は現在未使用。
+//
 //  POST /api/sync/purchase-master
 //    Header: X-Secret-Key: <VPS_SECRET_KEY>
 //    Body:   { syncedAt, totalItems, items: [{sku, productName, purchaseLimit, stock, sales28}] }

@@ -98,6 +98,29 @@ class CrossmallService {
   }
 
   /**
+   * 商品名を取得 (get_item API)
+   * @param {string} itemCode - 商品コード
+   * @returns {{ item_code: string, item_name: string } | null}
+   */
+  async getItemInfo(itemCode) {
+    try {
+      const result = await this.makeRequest('get_item', { item_code: itemCode });
+      if (!result) return null;
+
+      const resultItem = result.GetItem?.ResultSet?.Result;
+      if (!resultItem) return null;
+
+      return {
+        item_code: resultItem.item_code || itemCode,
+        item_name: resultItem.item_name || null,
+      };
+    } catch (error) {
+      console.error(`❌ CROSSMALL商品名取得エラー: ${itemCode}`, error.message);
+      return null;
+    }
+  }
+
+  /**
    * 在庫情報を取得
    */
   async getStockInfo(itemCode) {
