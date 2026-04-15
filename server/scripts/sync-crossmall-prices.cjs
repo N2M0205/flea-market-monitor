@@ -261,6 +261,106 @@ async function syncStock(crossmall) {
 
   purchaseMasterCache._saveToDisk();
   console.log(`✅ 在庫同期完了: ${updated}件更新, ${errors}件エラー`);
+
+  // キーワードに紐付いているがキャッシュ未登録のSKUを自動追加
+  await addMissingSkusFromKeywords(crossmall);
+}
+
+/**
+ * Keywords テーブルの crossmall_item_code のうちキャッシュ未登録のSKUを自動追加
+ * - Telegram Bot 等でキーワード追加時に crossmall_item_code を設定すれば次回sync時に自動登録
+ * - エラーが出ても既存SKUの更新には影響しない
+ */
+async function addMissingSkusFromKeywords(crossmall) {
+  let db;
+  try {
+    db = require('../models');
+    await db.sequelize.authenticate();
+  } catch (err) {
+    console.warn('⚠️ DB接続失敗のため新規SKUチェックをスキップ:', err.message);
+    return;
+  }
+
+  try {
+    // アクティブなキーワードから crossmall_item_code を取得
+    const rows = await db.Keyword.findAll({
+      where: { is_active: true },
+      attributes: ['crossmall_item_code'],
+      raw: true,
+    });
+
+    const keywordCodes = [...new Set(
+      rows.map(r => r.crossmall_item_code).filter(Boolean)
+    )];
+
+    if (keywordCodes.length === 0) {
+      console.log('📋 新規SKUチェック: キーワードに crossmall_item_code なし');
+      return;
+    }
+
+    // キャッシュに既に存在するSKUのセットを作成
+    const cachedSkus = new Set(
+      Object.values(purchaseMasterCache._cache.items)
+        .map(item => String(item.sku || item.crossmall_item_code || '').trim())
+        .filter(Boolean)
+    );
+
+    const missingSKUs = keywordCodes.filter(code => !cachedSkus.has(code));
+
+    if (missingSKUs.length === 0) {
+      console.log(`📋 新規SKUチェック: 未登録なし（キーワード紐付け ${keywordCodes.length}件 すべてキャッシュ済み）`);
+      return;
+    }
+
+    console.log(`\n🆕 新規SKU追加開始: ${missingSKUs.length}件`);
+    let added = 0;
+    let addErrors = 0;
+
+    for (const itemCode of missingSKUs) {
+      try {
+        // 商品名と在庫を取得
+        const [itemInfo, stockInfo] = await Promise.all([
+          crossmall.getItemInfo(itemCode).catch(() => null),
+          crossmall.getStockInfo(itemCode).catch(() => null),
+        ]);
+
+        const itemName = itemInfo?.item_name || '不明';
+        const stock    = stockInfo?.stock ?? 0;
+
+        // キャッシュに追加
+        const nextIndex = Object.keys(purchaseMasterCache._cache.items).length;
+        purchaseMasterCache._cache.items[nextIndex] = {
+          sku:           itemCode,
+          purchaseLimit: 0,
+          stock,
+          sales28:       0,
+          lastSalePrice: 0,
+          deliveryType:  '',
+          sales7:        0,
+          lastSaleDate:  null,
+          item_name:     itemName,
+        };
+        purchaseMasterCache._cache.totalItems = nextIndex + 1;
+
+        console.log(`  🆕 新規SKU追加: ${itemCode} (${itemName}) 在庫:${stock}`);
+        added++;
+      } catch (err) {
+        console.error(`  ❌ 新規SKU追加失敗: ${itemCode} ${err.message}`);
+        addErrors++;
+      }
+
+      await sleep(FETCH_DELAY_MS);
+    }
+
+    if (added > 0) {
+      purchaseMasterCache._saveToDisk();
+      console.log(`✅ 新規SKU追加完了: ${added}件追加, ${addErrors}件エラー`);
+    }
+  } catch (err) {
+    console.error('⚠️ 新規SKUチェックでエラー（既存SKU更新には影響なし）:', err.message);
+  } finally {
+    try { await db.sequelize.close(); } catch (_) {}
+  }
 }
 
 /**

@@ -1,9 +1,10 @@
 require('dotenv').config();
+const path = require('path');
 
 module.exports = {
   development: {
     dialect: 'sqlite',
-    storage: './database.sqlite',
+    storage: path.resolve(__dirname, '../database.sqlite'),
     logging: false
   },
   test: {
