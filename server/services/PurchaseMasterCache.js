@@ -120,7 +120,9 @@ class PurchaseMasterCache {
       }
     }
 
-    this._cache.lastSalePriceSyncedAt = new Date().toISOString();
+    const now = new Date().toISOString();
+    this._cache.syncedAt = now;               // GAS廃止(2026-04-15): crossmall-sync の実行日時で更新
+    this._cache.lastSalePriceSyncedAt = now;
     this._saveToDisk();
 
     console.log(`✅ lastSalePrice更新完了: ${updated}件更新, ${notFound}件マスタ未登録`);

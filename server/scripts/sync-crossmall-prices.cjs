@@ -264,6 +264,49 @@ async function syncStock(crossmall) {
 }
 
 /**
+ * item_name が未設定のSKUの商品名を get_item APIで取得してキャッシュに保存
+ */
+async function syncItemNames(crossmall) {
+  const items = purchaseMasterCache._cache.items;
+  if (!items || items.length === 0) {
+    console.log('⚠️ 商品名同期スキップ: マスタが空です');
+    return;
+  }
+
+  const targets = items.filter(item => !item.item_name || item.item_name === '不明');
+  console.log(`\n🏷️  商品名同期開始: 未設定 ${targets.length}件 / 全${items.length}件`);
+
+  if (targets.length === 0) {
+    console.log('商品名更新不要（全SKUに商品名あり）');
+    return;
+  }
+
+  let updated = 0;
+  let errors = 0;
+
+  for (const item of targets) {
+    const itemCode = String(item.sku || item.crossmall_item_code || '').trim();
+    if (!itemCode) continue;
+
+    try {
+      const info = await crossmall.getItemInfo(itemCode);
+      if (info && info.item_name) {
+        item.item_name = info.item_name;
+        updated++;
+      }
+    } catch (error) {
+      console.error(`  ❌ 商品名取得失敗: ${itemCode} ${error.message}`);
+      errors++;
+    }
+
+    await sleep(FETCH_DELAY_MS);
+  }
+
+  purchaseMasterCache._saveToDisk();
+  console.log(`✅ 商品名同期完了: ${updated}件更新, ${errors}件エラー`);
+}
+
+/**
  * picofuri-backend の PurchaseMasterCache をホットリロード
  */
 async function notifyCacheReload() {
@@ -287,6 +330,7 @@ main()
   .then(async () => {
     const crossmall = new CrossmallService();
     await syncStock(crossmall);
+    await syncItemNames(crossmall);
     await notifyCacheReload();
     process.exit(0);
   })
