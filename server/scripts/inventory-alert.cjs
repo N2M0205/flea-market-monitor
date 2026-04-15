@@ -11,11 +11,8 @@
  *   pm2 save
  *
  * 表示ルール:
- *   ⚫ 欠品中 : 最終販売30日以内のみ個別表示 / 30日超は件数のみ
- *   💰 価格見直し: 上位5件 + 他XX件
- *   🔴 危険/仕入れ急げ: 全件（件数が少ない前提）
- *   LINE版 : 各カテゴリ上位5件
- *   Telegram版: 🔴/🟡は全件 / ⚫は30日以内全件 / 💰は上位5件
+ *   LINE版 : ダッシュボード形式（🔴即対応全件/⚫欠品上位5件/📦補充上位10件/全体集計のみ）
+ *   Telegram版: 🔴/🟡は全件 / ⚫は30日以内全件 / 💰は上位5件 / 詳細情報あり
  */
 
 const fs = require('fs');
@@ -193,6 +190,56 @@ function fmtReplenishmentItem(item) {
   return `  ${item.itemName}: 昨日${item.yesterdaySales}個 → ${item.yesterdaySales}個補充（残${item.stock}個${badge}）`;
 }
 
+// ── LINE用スリムフォーマット ──────────────────────────
+
+function fmtCriticalSlim(a) {
+  const rem = isFinite(a.effectiveRemainingDays)
+    ? `有効残${a.effectiveRemainingDays.toFixed(1)}日`
+    : '不動';
+  const trendEmoji = a.trend === 'accelerating' ? '📈' : '';
+  return `  ${a.itemName}（残${a.stock}個/${rem}${trendEmoji}）`;
+}
+
+function fmtOutOfStockSlim(a) {
+  const rate = a.effectiveDailyRate28 > 0
+    ? `実力${a.effectiveDailyRate28.toFixed(1)}個/日`
+    : '販売ゼロ';
+  return `  ${a.itemName}（${rate}/最終${fmtDate(a.lastSaleDate)}）`;
+}
+
+function fmtReplenishmentItemSlim(item) {
+  if (item.level === 'out_of_stock') {
+    return `  ${item.itemName}: ${item.yesterdaySales}個補充（欠品中！）`;
+  }
+  const badge = {
+    critical_accelerating: '🔴',
+    critical: '🔴',
+    warning: '🟡',
+    price_review: '💰',
+  }[item.level] || '';
+  return `  ${item.itemName}: ${item.yesterdaySales}個補充（残${item.stock}個${badge}）`;
+}
+
+function buildReplenishmentSectionLine(replenishmentList, maxItems) {
+  const { items, skippedCount } = replenishmentList;
+  if (items.length === 0 && skippedCount === 0) return [];
+
+  const totalQty = items.reduce((s, i) => s + i.yesterdaySales, 0);
+  const L = [];
+  L.push(`📦 補充リスト: ${items.length}商品/${totalQty}個`);
+
+  if (items.length === 0) {
+    L.push('  対象なし');
+    return L;
+  }
+
+  const displayed = maxItems ? items.slice(0, maxItems) : items;
+  const omitted = items.length - displayed.length;
+  displayed.forEach(item => L.push(fmtReplenishmentItemSlim(item)));
+  if (omitted > 0) L.push(`  他${omitted}件`);
+  return L;
+}
+
 /**
  * 補充リストセクションを生成
  * @param {Object} replenishmentList - generateReplenishmentList()の戻り値
@@ -222,92 +269,63 @@ function buildReplenishmentSection(replenishmentList, maxItems) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// LINEメッセージ生成（各カテゴリ上位5件）
+// LINEメッセージ生成（ダッシュボード形式・スリム）
+//   🔴 即対応: criticalAcc + critical 全件
+//   ⚫ 欠品: 直近30日のみ 上位5件 + 他X件
+//   📦 補充: 上位10件 + 他X件
+//   📋 全体集計のみ（🟡/💰/🟢/⚪は件数のみ）
+//   💡 フリマ推奨: Telegramのみ
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-function buildLineMessage(result, today, leadTime) {
-  const { alerts, summary, recommendations, replenishmentList } = result;
+function buildLineMessage(result, today) {
+  const { alerts, summary, replenishmentList } = result;
 
   const criticalAcc = alerts.filter(a => a.level === 'critical_accelerating');
-  const outOfStock  = alerts.filter(a => a.level === 'out_of_stock');
   const critical    = alerts.filter(a => a.level === 'critical');
-  const warning     = alerts.filter(a => a.level === 'warning');
-  const priceReview = alerts.filter(a => a.level === 'price_review');
+  const outOfStock  = alerts.filter(a => a.level === 'out_of_stock');
 
-  // ⚫ 欠品中を30日以内/超で分割
-  const outRecent = outOfStock.filter(a => daysSince(a.lastSaleDate) <= 30);
-  const outOld    = outOfStock.filter(a => daysSince(a.lastSaleDate) >  30);
+  const immediateAll = [...criticalAcc, ...critical];
+  const outRecent    = outOfStock.filter(a => daysSince(a.lastSaleDate) <= 30);
+  const outOld       = outOfStock.filter(a => daysSince(a.lastSaleDate) >  30);
 
-  const totalCritical = criticalAcc.length + critical.length;
-  const L = [];  // lines
+  const totalCritical = immediateAll.length;
+  const L = [];
 
-  L.push(`📊 在庫日報 ${today}（リードタイム: ${leadTime}日）`);
+  L.push(`📊 在庫日報 ${today}`);
   L.push('');
 
-  // 🔴📈 仕入れ急げ
-  if (criticalAcc.length > 0) {
-    L.push(`🔴📈 仕入れ急げ: ${criticalAcc.length}件`);
-    criticalAcc.slice(0, 5).forEach(a => L.push(fmtCritical(a)));
-    if (criticalAcc.length > 5) L.push(`  他${criticalAcc.length - 5}件`);
+  // 🔴 即対応（全件）
+  if (immediateAll.length > 0) {
+    L.push(`🔴 即対応: ${immediateAll.length}件`);
+    immediateAll.forEach(a => L.push(fmtCriticalSlim(a)));
     L.push('');
   }
 
-  // ⚫ 欠品中
-  L.push(`⚫ 欠品中: ${outOfStock.length}件`);
+  // ⚫ 欠品（直近30日のみ、上位5件+他X件）
+  L.push(`⚫ 欠品（直近30日）: ${outRecent.length}件`);
   if (outRecent.length > 0) {
-    outRecent.slice(0, 5).forEach(a => L.push(fmtOutOfStock(a)));
-    if (outRecent.length > 5) L.push(`  他${outRecent.length - 5}件（30日以内）`);
+    outRecent.slice(0, 5).forEach(a => L.push(fmtOutOfStockSlim(a)));
+    if (outRecent.length > 5) L.push(`  他${outRecent.length - 5}件`);
+  } else {
+    L.push('  なし');
   }
-  if (outOld.length > 0) {
-    L.push(`  他${outOld.length}件（30日超未販売）`);
-  }
-  if (outOfStock.length === 0) L.push('  なし');
+  if (outOld.length > 0) L.push(`  ※30日超: ${outOld.length}件`);
   L.push('');
 
-  // 🔴 危険
-  if (critical.length > 0) {
-    L.push(`🔴 危険: ${critical.length}件`);
-    critical.slice(0, 5).forEach(a => L.push(fmtCritical(a)));
-    if (critical.length > 5) L.push(`  他${critical.length - 5}件`);
-    L.push('');
-  }
-
-  // 🟡 注意
-  if (warning.length > 0) {
-    L.push(`🟡 注意: ${warning.length}件`);
-    warning.slice(0, 5).forEach(a => L.push(fmtWarning(a)));
-    if (warning.length > 5) L.push(`  他${warning.length - 5}件`);
-    L.push('');
-  }
-
-  // 💰 価格見直し（上位5件+他XX件）
-  if (priceReview.length > 0) {
-    L.push(`💰 価格見直し: ${priceReview.length}件`);
-    priceReview.slice(0, 5).forEach(a => L.push(fmtPriceReview(a)));
-    if (priceReview.length > 5) L.push(`  他${priceReview.length - 5}件`);
-    L.push('');
-  }
-
-  // 集計行
-  L.push(
-    `📋 全体: ${summary.total}件 / 🔴${totalCritical} 🟡${summary.warning} 🟢${summary.ok} ⚫${summary.out_of_stock} 💰${summary.price_review} ⚪${summary.dead_stock}`
-  );
-
-  // 補充リスト（上位10件 + 他X件）
+  // 📦 補充リスト（上位10件+他X件）
   if (replenishmentList) {
-    const repLines = buildReplenishmentSection(replenishmentList, 10);
+    const repLines = buildReplenishmentSectionLine(replenishmentList, 10);
     if (repLines.length > 0) {
-      L.push('');
       repLines.forEach(l => L.push(l));
+      L.push('');
     }
   }
 
-  // フリマ推奨（上位3件）
-  if (recommendations.length > 0) {
-    L.push('');
-    L.push(`💡 フリマ監視おすすめ: ${recommendations.length}件`);
-    recommendations.slice(0, 3).forEach(r => L.push(fmtRecommend(r)));
-  }
+  // 📋 全体集計
+  L.push(
+    `📋 全体: ${summary.total}件 🔴${totalCritical} 🟡${summary.warning} 🟢${summary.ok} ⚫${summary.out_of_stock} 💰${summary.price_review} ⚪${summary.dead_stock}`
+  );
+  L.push('※詳細はTelegramで確認');
 
   return L.join('\n');
 }
@@ -416,7 +434,7 @@ async function main() {
   console.log(`🔴📈: ${summary.critical_accelerating} / 🔴: ${summary.critical} / 🟡: ${summary.warning} / ⚫: ${summary.out_of_stock} / 💰: ${summary.price_review} / ⚪: ${summary.dead_stock}`);
 
   const leadTime = service.defaultLeadTime;
-  const lineMsg     = buildLineMessage(result, today, leadTime);
+  const lineMsg     = buildLineMessage(result, today);
   const telegramMsg = buildTelegramMessage(result, today, leadTime);
 
   console.log('\n=== LINE送信 ===');
