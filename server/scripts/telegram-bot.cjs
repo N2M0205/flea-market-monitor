@@ -15,6 +15,7 @@
  */
 
 const path = require('path');
+const fs = require('fs');
 const os = require('os');
 const { execSync } = require('child_process');
 
@@ -28,6 +29,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const db = require('../models');
 const { sequelize, Keyword, Product, User } = db;
 const InventoryAlertService = require('../services/InventoryAlertService');
+const INVENTORY_CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'purchase_master_cache.json');
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 設定
@@ -279,6 +281,11 @@ bot.on('callback_query', async (query) => {
     const kwId = data.slice('clearprice_max_'.length);
     userStates.delete(userId);
     await handleClearPrice(chatId, kwId, 'max_price');
+
+  // ─── フリマ推奨 即時監視追加 ───
+  } else if (data.startsWith('add:')) {
+    const sku = data.slice(4);
+    await handleAddMonitor(chatId, query, sku);
 
   // ─── 汎用キャンセル ───
   } else if (data === 'cancel') {
@@ -828,13 +835,93 @@ function buildInventoryMessage(result, today, leadTime) {
     }
   }
 
-  if (recommendations.length > 0) {
-    L.push('');
-    L.push(`💡 フリマ監視おすすめ: ${recommendations.length}件`);
-    recommendations.forEach(r => L.push(_fmtRecommend(r)));
-  }
+  // 💡 フリマ推奨は別メッセージ（InlineKeyboardボタン付き）で送信するためここでは含めない
 
   return L.join('\n');
+}
+
+/** キャッシュからSKU→商品名を取得（失敗時はSKUを返す） */
+function getItemNameFromCache(sku) {
+  try {
+    const cache = JSON.parse(fs.readFileSync(INVENTORY_CACHE_FILE, 'utf8'));
+    const item = Object.values(cache.items || {}).find(i => i.sku === sku);
+    return item?.item_name || sku;
+  } catch {
+    return sku;
+  }
+}
+
+/** フリマ推奨を InlineKeyboard ボタン付きで送信 */
+async function sendRecommendations(chatId, recommendations) {
+  if (recommendations.length === 0) return;
+
+  const lines = [`💡 フリマ監視おすすめ（${recommendations.length}件）`];
+  recommendations.forEach(r => lines.push(_fmtRecommend(r)));
+
+  const buttons = recommendations.map(r => [{
+    text: `➕ 監視追加: ${r.itemName.slice(0, 15)}`,
+    callback_data: `add:${r.sku}`,
+  }]);
+
+  await bot.sendMessage(chatId, lines.join('\n'), {
+    reply_markup: { inline_keyboard: buttons }
+  });
+}
+
+/** フリマ推奨ボタンから即座にキーワード登録 */
+async function handleAddMonitor(chatId, query, sku) {
+  try {
+    const existing = await Keyword.findOne({
+      where: { crossmall_item_code: sku, is_active: true }
+    });
+
+    const itemName = getItemNameFromCache(sku);
+    const btnText = existing ? '✅ 既に監視中' : '✅ 追加済み';
+
+    // クリックされたボタンを更新（reply_markup が取得できる場合のみ）
+    const currentKeyboard = query.message.reply_markup?.inline_keyboard;
+    if (currentKeyboard) {
+      const newKeyboard = currentKeyboard.map(row =>
+        row.map(btn =>
+          btn.callback_data === query.data
+            ? { text: btnText, callback_data: 'noop' }
+            : btn
+        )
+      );
+      try {
+        await bot.editMessageReplyMarkup(
+          { inline_keyboard: newKeyboard },
+          { chat_id: chatId, message_id: query.message.message_id }
+        );
+      } catch {} // メッセージ更新失敗は無視
+    }
+
+    if (existing) {
+      await bot.sendMessage(chatId, `⚠️ 「${itemName}」は既に監視中です`);
+      return;
+    }
+
+    const dbUserId = await getDefaultUserId();
+    if (!dbUserId) {
+      await bot.sendMessage(chatId, '❌ ユーザーが見つかりません');
+      return;
+    }
+
+    await Keyword.create({
+      user_id: dbUserId,
+      keyword: itemName,
+      crossmall_item_code: sku,
+      min_price: null,
+      max_price: null,
+      platforms: JSON.stringify(['mercari', 'yahoo_flea']),
+      is_active: true,
+    });
+
+    await replyWithKeyboard(chatId, `✅ 「${itemName}」を監視に追加しました`);
+  } catch (err) {
+    console.error('[telegram-bot] 監視追加エラー:', err.message);
+    await bot.sendMessage(chatId, `❌ エラー: ${err.message}`);
+  }
 }
 
 async function handleInventory(chatId) {
@@ -859,6 +946,9 @@ async function handleInventory(chatId) {
         await bot.sendMessage(chatId, chunks[i]);
       }
     }
+
+    // 推奨リストをボタン付き別メッセージで送信
+    await sendRecommendations(chatId, result.recommendations);
   } catch (err) {
     console.error('[telegram-bot] 在庫アラートエラー:', err.message);
     await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
