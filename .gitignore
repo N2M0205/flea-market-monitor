@@ -6,3 +6,7 @@ logs/
 *.log
 .DS_Store
 Thumbs.db
+
+# 在庫アラート実行時データ（ランタイム生成・コミット不要）
+data/inventory_alert_state.json
+data/inventory_alert_history.json
