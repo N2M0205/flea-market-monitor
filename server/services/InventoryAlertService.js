@@ -19,7 +19,7 @@ const STATE_FILE = path.join(DATA_DIR, 'inventory_alert_state.json');
 class InventoryAlertService {
   constructor(options = {}) {
     this.defaultLeadTime = options.leadTime
-      || parseInt(process.env.DEFAULT_LEAD_TIME || '3', 10);
+      || parseInt(process.env.DEFAULT_LEAD_TIME || '5', 10);
     this.accelerationThreshold = 1.5;
     this.decelerationThreshold = 0.5;
   }
