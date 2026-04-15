@@ -146,7 +146,6 @@ class LineNotificationService {
     const { product, master, crossmallInfo, hoursOld } = params;
 
     const price         = Number(product?.price) || 0;
-    const purchaseLimit = master?.purchaseLimit != null ? Number(master.purchaseLimit) : null;
     const stock         = crossmallInfo?.stock  != null ? crossmallInfo.stock : (master?.stock ?? null);
     // sales28: CROSSMALL APIが0を返す場合はマスターキャッシュにフォールバック
     const sales28       = (crossmallInfo?.sales28 != null && crossmallInfo.sales28 > 0)
@@ -162,8 +161,12 @@ class LineNotificationService {
     const lastSaleDateDisp = lastSaleDate ? lastSaleDate.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1/$2') : '─';
 
     // 送料・利益見込み計算
-    const deliveryType = crossmallInfo?.deliveryType || master?.deliveryType || '';
-    const shippingCost = getShippingCost(deliveryType);
+    const deliveryType  = crossmallInfo?.deliveryType || master?.deliveryType || '';
+    const shippingCost  = getShippingCost(deliveryType);
+    // 上限仕入: キャッシュ値(GAS由来で陳腐化)ではなく現在の直近販売価格から動的計算
+    const purchaseLimit = lastSalePrice != null
+      ? Math.round(lastSalePrice * 0.9 - shippingCost)
+      : null;
 
     let profitLine = '';
     if (lastSalePrice != null && price > 0) {
