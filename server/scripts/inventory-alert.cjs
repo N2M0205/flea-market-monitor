@@ -180,12 +180,53 @@ function fmtRecommend(r) {
   return `  ${r.itemName}（28日${r.sales28}個/在庫${r.stock}個/${label}）`;
 }
 
+function fmtReplenishmentItem(item) {
+  if (item.level === 'out_of_stock') {
+    return `  ${item.itemName}: 昨日${item.yesterdaySales}個 → 欠品中！`;
+  }
+  const badge = {
+    critical_accelerating: '/🔴危険',
+    critical: '/🔴危険',
+    warning: '/🟡注意',
+    price_review: '/💰価格見直し',
+  }[item.level] || '';
+  return `  ${item.itemName}: 昨日${item.yesterdaySales}個 → ${item.yesterdaySales}個補充（残${item.stock}個${badge}）`;
+}
+
+/**
+ * 補充リストセクションを生成
+ * @param {Object} replenishmentList - generateReplenishmentList()の戻り値
+ * @param {number|null} maxItems - 表示上限（nullで全件）
+ * @returns {string[]} lines
+ */
+function buildReplenishmentSection(replenishmentList, maxItems) {
+  const { items, skippedCount } = replenishmentList;
+  if (items.length === 0 && skippedCount === 0) return [];
+
+  const L = [];
+  const displayed = maxItems ? items.slice(0, maxItems) : items;
+  const omitted = items.length - displayed.length;
+  const totalQty = items.reduce((s, i) => s + i.yesterdaySales, 0);
+
+  L.push(`📦 本日補充リスト（前日販売分）`);
+  if (items.length === 0) {
+    L.push('  対象なし');
+  } else {
+    displayed.forEach(item => L.push(fmtReplenishmentItem(item)));
+    if (omitted > 0) L.push(`  他${omitted}件`);
+    L.push(`  計: ${items.length}商品 / ${totalQty}個補充`);
+    if (skippedCount > 0) L.push(`  ⏭ スキップ（在庫30日以上）: ${skippedCount}件`);
+  }
+
+  return L;
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // LINEメッセージ生成（各カテゴリ上位5件）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function buildLineMessage(result, today, leadTime) {
-  const { alerts, summary, recommendations } = result;
+  const { alerts, summary, recommendations, replenishmentList } = result;
 
   const criticalAcc = alerts.filter(a => a.level === 'critical_accelerating');
   const outOfStock  = alerts.filter(a => a.level === 'out_of_stock');
@@ -252,6 +293,15 @@ function buildLineMessage(result, today, leadTime) {
     `📋 全体: ${summary.total}件 / 🔴${totalCritical} 🟡${summary.warning} 🟢${summary.ok} ⚫${summary.out_of_stock} 💰${summary.price_review} ⚪${summary.dead_stock}`
   );
 
+  // 補充リスト（上位10件 + 他X件）
+  if (replenishmentList) {
+    const repLines = buildReplenishmentSection(replenishmentList, 10);
+    if (repLines.length > 0) {
+      L.push('');
+      repLines.forEach(l => L.push(l));
+    }
+  }
+
   // フリマ推奨（上位3件）
   if (recommendations.length > 0) {
     L.push('');
@@ -270,7 +320,7 @@ function buildLineMessage(result, today, leadTime) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function buildTelegramMessage(result, today, leadTime) {
-  const { alerts, summary, recommendations } = result;
+  const { alerts, summary, recommendations, replenishmentList } = result;
 
   const criticalAcc = alerts.filter(a => a.level === 'critical_accelerating');
   const outOfStock  = alerts.filter(a => a.level === 'out_of_stock');
@@ -326,6 +376,15 @@ function buildTelegramMessage(result, today, leadTime) {
   L.push(
     `📋 全体: ${summary.total}件 / 🔴${totalCritical} 🟡${summary.warning} 🟢${summary.ok} ⚫${summary.out_of_stock} 💰${summary.price_review} ⚪${summary.dead_stock}`
   );
+
+  // 補充リスト（全件）
+  if (replenishmentList) {
+    const repLines = buildReplenishmentSection(replenishmentList, null);
+    if (repLines.length > 0) {
+      L.push('');
+      repLines.forEach(l => L.push(l));
+    }
+  }
 
   if (recommendations.length > 0) {
     L.push('');

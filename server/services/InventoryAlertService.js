@@ -50,6 +50,8 @@ class InventoryAlertService {
     this._saveState(alerts, state);
 
     const summary = this._buildSummary(alerts);
+    const replenishmentList = this.generateReplenishmentList(alerts, salesMap);
+
     let recommendations = [];
     if (!skipRecommendations) {
       try {
@@ -59,7 +61,7 @@ class InventoryAlertService {
       }
     }
 
-    return { alerts, summary, recommendations };
+    return { alerts, summary, recommendations, replenishmentList };
   }
 
   /**
@@ -434,6 +436,81 @@ class InventoryAlertService {
     }
     if (effectiveRemainingDays <= 4) return 'warning';
     return 'ok';
+  }
+
+  // ─────────────────────────────────────────────
+  // 補充リスト
+  // ─────────────────────────────────────────────
+
+  /**
+   * 本日補充リスト生成（前日販売分）
+   * @param {Array} alerts - generateAlert()が返すalerts（既計算済み）
+   * @param {Map} [salesMap] - 省略時はファイルから再ロード
+   * @returns {{ items: Array, skippedCount: number, yesterdayStr: string }}
+   *   items: [{sku, itemName, yesterdaySales, stock, level, stockDays}] 販売数降順
+   *   skippedCount: 在庫日数30日以上でスキップした件数
+   *   yesterdayStr: 集計対象日 "YYYY-MM-DD"
+   */
+  generateReplenishmentList(alerts, salesMap) {
+    const yesterdayStr = this._getYesterdayJST();
+
+    // salesMapが渡されない場合はファイルから読み込む
+    if (!salesMap) {
+      const historyRaw = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+      salesMap = new Map();
+      for (const [sku, records] of Object.entries(historyRaw.sales || {})) {
+        salesMap.set(sku, records);
+      }
+    }
+
+    // alertsをSKUでインデックス化
+    const alertMap = new Map(alerts.map(a => [a.sku, a]));
+
+    const items = [];
+    let skippedCount = 0;
+
+    for (const [sku, records] of salesMap) {
+      // 昨日の販売数を集計
+      const yesterdaySales = records.filter(r => r.date === yesterdayStr).length;
+      if (yesterdaySales === 0) continue;
+
+      // 対象外SKU（2314-*以外など、alertsに含まれないSKU）はスキップ
+      const alert = alertMap.get(sku);
+      if (!alert) continue;
+
+      // 在庫日数30日以上はスキップ（在庫過多）
+      if (isFinite(alert.stockDays) && alert.stockDays >= 30) {
+        skippedCount++;
+        continue;
+      }
+
+      items.push({
+        sku,
+        itemName: alert.itemName,
+        yesterdaySales,
+        stock: alert.stock,
+        level: alert.level,
+        stockDays: alert.stockDays,
+      });
+    }
+
+    // 昨日の販売数が多い順にソート
+    items.sort((a, b) => b.yesterdaySales - a.yesterdaySales);
+
+    return { items, skippedCount, yesterdayStr };
+  }
+
+  /**
+   * 昨日の日付をJST基準で "YYYY-MM-DD" 形式で返す
+   * サーバーのTZ設定によらずJST固定
+   */
+  _getYesterdayJST() {
+    const jstOffset = 9 * 60 * 60 * 1000;
+    const jstYesterday = new Date(Date.now() + jstOffset - 24 * 60 * 60 * 1000);
+    const y = jstYesterday.getUTCFullYear();
+    const m = String(jstYesterday.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(jstYesterday.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 
   // ─────────────────────────────────────────────
