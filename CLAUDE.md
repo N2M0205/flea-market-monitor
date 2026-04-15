@@ -16,3 +16,47 @@
 - restart/stop OK
 - delete は承認後のみ
 - PM2再起動はマージ後にオーナー指示があってから
+
+## プロジェクト概要
+ピコフリ（flea-market-monitor）= フリマ監視→LINE通知システム
+- メルカリ・Yahoo!フリマを10分間隔でスクレイピング
+- 新着商品検出→CROSSMALL在庫/価格情報付きでLINE通知
+- Telegram Botでキーワード管理（@picofuri_admin_bot）
+
+## 環境
+- Win VPS: 160.251.227.206（ConoHa, 8GB RAM）本番
+- Node.js + Express + SQLite（NODE_ENV=development ※productionにするとPostgreSQL接続エラー）
+- GitHub: N2M0205/flea-market-monitor
+
+## PM2プロセス構成
+| プロセス | 種別 | 役割 |
+|---------|------|------|
+| picofuri-backend | 常時起動（500MB上限） | メインスクレイピング + API |
+| crossmall-sync | cron 0 */2 * * * | CROSSMALL同期 |
+| chrome-cleanup | cron */30 * * * * | Chrome/Tempクリーンアップ |
+| health-check | cron 0,30 * * * * | ヘルスチェック + LINE通知 |
+| db-cleanup | cron 0 3 * * * | DB 90日超レコード削除 |
+| pm2-logrotate | 常時 | ログローテーション |
+| telegram-bot | 常時起動（200MB上限） | Telegramキーワード管理 |
+| inventory-alert | cron 0 23 * * * | 在庫アラート（JST 08:00）LINE+Telegram |
+
+## 重要な教訓（過去の障害から）
+- platformsフィールドは3形式ある（配列/JSON文字列/オブジェクト）→ parsePlatforms()で正規化すること
+- Mercariスクレイピング: waitUntil='domcontentloaded' + waitForSelector が安定。networkidle2はタイムアウトする
+- Yahoo!フリマ: search()ごとに独立ブラウザ生成必須（共有するとERR_ABORTED）
+- CROSSMALL API: order_number単体でページネーション可。conditionを付けると署名エラー
+- .envをPowerShellで作るとBOM問題 → node -e "fs.writeFileSync()" を使う
+- PM2 --update-env フラグ必須（env変更時）
+- PurchaseMasterCacheはPOST /api/cache/reload で更新（pm2 restart不要）
+- CROSSMALL get_stock APIはItemNameを返さない。商品名取得には get_item API（getItemInfo()）を使うこと
+- syncItemNames()は初回のみ全件取得（157件×1秒≒2.6分）、2回目以降はitem_name未設定分のみ（通常0件で即終了）
+
+## 既知の未解決課題
+1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
+2. メルカリセレクタのフォールバック強化（data-testid廃止リスク）
+3. 在庫アラート Phase 1完了（毎朝8時 LINE+Telegram サマリー）。Phase 2以降は設計書参照: PICOFURI-DESIGN-INVENTORY-ALERT-V2.1.md
+
+## 役割分担
+- Claude（チャット）= 設計担当：方針決定・レビュー
+- Claude Code（VPS）= 実行担当：実装・テスト
+- 決定は実装前に必ず議論する
