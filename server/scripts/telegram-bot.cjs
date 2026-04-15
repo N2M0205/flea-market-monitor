@@ -414,7 +414,7 @@ async function handleAddConfirm(chatId, userId) {
       crossmall_item_code: state.sku || null,
       min_price: state.price != null ? state.price : null,
       max_price: state.max_price != null ? state.max_price : null,
-      platforms: { mercari: true, yahoo_flea: true, rakuma: false, yahoo_auction: false },
+      platforms: JSON.stringify(['mercari', 'yahoo_flea']),
       is_active: true
     });
 
