@@ -86,6 +86,38 @@ function applyTitleFilter(products, keywordStr, platform) {
 }
 
 // ============================================================
+// platforms フィールド正規化ヘルパー
+// ============================================================
+
+/**
+ * DBのplatformsフィールドを配列に正規化する
+ * 対応形式:
+ *   1. 配列                              → そのまま返す
+ *   2. JSON文字列 '["mercari","yahoo_flea"]' → JSON.parse して配列化
+ *   3. オブジェクト {"mercari":true,...} → true のキーだけ抽出して配列化
+ */
+function parsePlatforms(rawPlatforms) {
+  if (!rawPlatforms) return [];
+  if (Array.isArray(rawPlatforms)) return rawPlatforms;
+  if (typeof rawPlatforms === 'string') {
+    try {
+      const parsed = JSON.parse(rawPlatforms);
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === 'object' && parsed !== null) {
+        return Object.keys(parsed).filter(k => parsed[k]);
+      }
+      return [parsed];
+    } catch (e) {
+      return [rawPlatforms];
+    }
+  }
+  if (typeof rawPlatforms === 'object') {
+    return Object.keys(rawPlatforms).filter(k => rawPlatforms[k]);
+  }
+  return [];
+}
+
+// ============================================================
 
 class ScrapingService {
   constructor() {
@@ -277,21 +309,9 @@ class ScrapingService {
     console.log(`\n🔍 キーワード処理: "${keyword.keyword}"`);
     console.log(`📌 使用メソッド: puppeteer`);
 
-    let platforms = [];
-    if (keyword.platforms) {
-      if (Array.isArray(keyword.platforms)) {
-        platforms = keyword.platforms;
-      } else if (typeof keyword.platforms === 'string') {
-        try {
-          platforms = JSON.parse(keyword.platforms);
-        } catch (e) {
-          platforms = [keyword.platforms];
-        }
-      }
-    } else if (keyword.platform) {
-      platforms = [keyword.platform];
-    } else {
-      platforms = ['mercari'];
+    let platforms = parsePlatforms(keyword.platforms);
+    if (platforms.length === 0) {
+      platforms = keyword.platform ? [keyword.platform] : ['mercari'];
     }
 
     console.log(`🎯 対象プラットフォーム: ${platforms.join(', ')}`);
