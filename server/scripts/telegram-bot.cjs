@@ -27,6 +27,7 @@ process.chdir(path.join(__dirname, '..'));
 const TelegramBot = require('node-telegram-bot-api');
 const db = require('../models');
 const { sequelize, Keyword, Product, User } = db;
+const InventoryAlertService = require('../services/InventoryAlertService');
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 設定
@@ -57,7 +58,7 @@ const MAIN_KEYBOARD = {
     keyboard: [
       [{ text: '📋 一覧' }, { text: '➕ 追加' }],
       [{ text: '🗑 削除' }, { text: '🚫 除外設定' }],
-      [{ text: '💰 価格設定' }, { text: '📊 ステータス' }]
+      [{ text: '💰 価格設定' }, { text: '📦 在庫' }, { text: '📊 ステータス' }]
     ],
     resize_keyboard: true,
     persistent: true
@@ -163,6 +164,11 @@ bot.on('message', async (msg) => {
   if (text === '💰 価格設定') {
     userStates.delete(userId);
     await handlePriceStart(chatId);
+    return;
+  }
+  if (text === '📦 在庫') {
+    userStates.delete(userId);
+    await handleInventory(chatId);
     return;
   }
   if (text === '📊 ステータス') {
@@ -696,6 +702,165 @@ async function handleClearPrice(chatId, kwId, field) {
     await replyWithKeyboard(chatId, `✅ 「${kw.keyword}」の${label}を削除しました（制限なし）`);
   } catch (err) {
     console.error('[telegram-bot] 価格削除エラー:', err.message);
+    await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📦 在庫アラート
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/** 行単位で maxLen 文字に分割（4096文字制限対応） */
+function splitMessage(text, maxLen) {
+  if (text.length <= maxLen) return [text];
+  const chunks = [];
+  let current = '';
+  for (const line of text.split('\n')) {
+    const next = current ? current + '\n' + line : line;
+    if (next.length > maxLen) {
+      if (current) chunks.push(current.trim());
+      current = line;
+    } else {
+      current = next;
+    }
+  }
+  if (current) chunks.push(current.trim());
+  return chunks;
+}
+
+// フォーマットユーティリティ（inventory-alert.cjs の Telegram 版と同じ仕様）
+function _daysSince(dateStr) {
+  if (!dateStr) return 999;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / (24 * 60 * 60 * 1000));
+}
+function _fmtDate(dateStr) {
+  if (!dateStr) return 'なし';
+  const [, m, d] = dateStr.split('-');
+  return `${parseInt(m)}/${parseInt(d)}`;
+}
+function _trendLabel(trend) {
+  return { accelerating: '📈加速', stable: '➡️安定', decelerating: '📉減速', new_surge: '⚡急伸', unknown: '⏸不明' }[trend] ?? trend;
+}
+function _fmtCritical(a) {
+  const rem = isFinite(a.effectiveRemainingDays) ? `有効残${a.effectiveRemainingDays.toFixed(1)}日` : '不動';
+  return `  ${a.itemName}（残${a.stock}個/${rem}/${_trendLabel(a.trend)}）`;
+}
+function _fmtWarning(a) {
+  return `  ${a.itemName}（残${a.stock}個/有効残${a.effectiveRemainingDays.toFixed(1)}日/${_trendLabel(a.trend)}）`;
+}
+function _fmtOutOfStock(a) {
+  const days = _daysSince(a.lastSaleDate);
+  const rate = a.effectiveDailyRate28 > 0 ? `実力${a.effectiveDailyRate28.toFixed(1)}個/日` : '販売ゼロ';
+  return `  ${a.itemName}（0個/${rate}/最終${_fmtDate(a.lastSaleDate)}/${days}日前）`;
+}
+function _fmtPriceReview(a) {
+  return `  ${a.itemName}（残${a.stock}個/28日${a.sales28}個→7日${a.sales7}個📉）`;
+}
+function _fmtRecommend(r) {
+  const label = r.reason === 'new_surge' ? '⚡急伸' : '未監視';
+  return `  ${r.itemName}（28日${r.sales28}個/在庫${r.stock}個/${label}）`;
+}
+function _fmtReplenishmentItem(item) {
+  if (item.level === 'out_of_stock') return `  ${item.itemName}: 昨日${item.yesterdaySales}個 → 欠品中！`;
+  const badge = { critical_accelerating: '/🔴危険', critical: '/🔴危険', warning: '/🟡注意', price_review: '/💰価格見直し' }[item.level] || '';
+  return `  ${item.itemName}: 昨日${item.yesterdaySales}個 → ${item.yesterdaySales}個補充（残${item.stock}個${badge}）`;
+}
+
+function buildInventoryMessage(result, today, leadTime) {
+  const { alerts, summary, recommendations, replenishmentList } = result;
+
+  const criticalAcc = alerts.filter(a => a.level === 'critical_accelerating');
+  const outOfStock  = alerts.filter(a => a.level === 'out_of_stock');
+  const critical    = alerts.filter(a => a.level === 'critical');
+  const warning     = alerts.filter(a => a.level === 'warning');
+  const priceReview = alerts.filter(a => a.level === 'price_review');
+
+  const outRecent = outOfStock.filter(a => _daysSince(a.lastSaleDate) <= 30);
+  const outOld    = outOfStock.filter(a => _daysSince(a.lastSaleDate) >  30);
+  const totalCritical = criticalAcc.length + critical.length;
+  const L = [];
+
+  L.push(`📊 在庫日報 ${today}（リードタイム: ${leadTime}日）`);
+  L.push('');
+
+  if (criticalAcc.length > 0) {
+    L.push(`🔴📈 仕入れ急げ: ${criticalAcc.length}件`);
+    criticalAcc.forEach(a => L.push(_fmtCritical(a)));
+    L.push('');
+  }
+
+  L.push(`⚫ 欠品中: ${outOfStock.length}件`);
+  if (outRecent.length > 0) outRecent.forEach(a => L.push(_fmtOutOfStock(a)));
+  if (outOld.length > 0) L.push(`  他${outOld.length}件（30日超未販売）`);
+  if (outOfStock.length === 0) L.push('  なし');
+  L.push('');
+
+  if (critical.length > 0) {
+    L.push(`🔴 危険: ${critical.length}件`);
+    critical.forEach(a => L.push(_fmtCritical(a)));
+    L.push('');
+  }
+
+  if (warning.length > 0) {
+    L.push(`🟡 注意: ${warning.length}件`);
+    warning.forEach(a => L.push(_fmtWarning(a)));
+    L.push('');
+  }
+
+  if (priceReview.length > 0) {
+    L.push(`💰 価格見直し: ${priceReview.length}件`);
+    priceReview.slice(0, 5).forEach(a => L.push(_fmtPriceReview(a)));
+    if (priceReview.length > 5) L.push(`  他${priceReview.length - 5}件`);
+    L.push('');
+  }
+
+  L.push(`📋 全体: ${summary.total}件 / 🔴${totalCritical} 🟡${summary.warning} 🟢${summary.ok} ⚫${summary.out_of_stock} 💰${summary.price_review} ⚪${summary.dead_stock}`);
+
+  if (replenishmentList) {
+    const { items, skippedCount } = replenishmentList;
+    if (items.length > 0 || skippedCount > 0) {
+      const totalQty = items.reduce((s, i) => s + i.yesterdaySales, 0);
+      L.push('');
+      L.push('📦 本日補充リスト（前日販売分）');
+      items.forEach(item => L.push(_fmtReplenishmentItem(item)));
+      L.push(`  計: ${items.length}商品 / ${totalQty}個補充`);
+      if (skippedCount > 0) L.push(`  ⏭ スキップ（在庫30日以上）: ${skippedCount}件`);
+    }
+  }
+
+  if (recommendations.length > 0) {
+    L.push('');
+    L.push(`💡 フリマ監視おすすめ: ${recommendations.length}件`);
+    recommendations.forEach(r => L.push(_fmtRecommend(r)));
+  }
+
+  return L.join('\n');
+}
+
+async function handleInventory(chatId) {
+  try {
+    await bot.sendMessage(chatId, '📦 在庫アラート計算中...');
+
+    const service = new InventoryAlertService();
+    const result = await service.generateAlert();
+
+    const today = new Date().toLocaleDateString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).replace(/\//g, '-');
+
+    const msg = buildInventoryMessage(result, today, service.defaultLeadTime);
+    const chunks = splitMessage(msg, 4096);
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (i === chunks.length - 1) {
+        await replyWithKeyboard(chatId, chunks[i]);
+      } else {
+        await bot.sendMessage(chatId, chunks[i]);
+      }
+    }
+  } catch (err) {
+    console.error('[telegram-bot] 在庫アラートエラー:', err.message);
     await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
   }
 }
