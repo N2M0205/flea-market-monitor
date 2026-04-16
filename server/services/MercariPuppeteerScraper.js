@@ -144,9 +144,9 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
 
       // ── 商品要素の出現を待つ（SPAの描画完了を待機） ──────────
       try {
-        await page.waitForSelector('[data-testid="item-cell"]', { timeout: 20000 });
+        await page.waitForSelector('[data-testid="item-cell"]', { timeout: 10000 });
       } catch (e) {
-        console.log('⚠️ item-cell 出現待機タイムアウト（20秒）— 商品0件の可能性');
+        console.log('⚠️ item-cell 出現待機タイムアウト（10秒）— 商品0件の可能性');
       }
 
       // ── 追加の安定待機（描画バッファ） ─────────────────────────
@@ -194,8 +194,8 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
         const hasImg  = !!(first.querySelector('img[src]')?.src?.startsWith('http'));
         const hasText = (first.textContent || '').replace(/\s/g, '').length > 5;
         return hasImg || hasText;
-      }, { timeout: 30000 }).catch(() => {
-        console.warn('⚠️ 描画待機タイムアウト（30秒経過）');
+      }, { timeout: 15000 }).catch(() => {
+        console.warn('⚠️ 描画待機タイムアウト（15秒経過）');
       });
 
       // ── パターン1: data-testid="item-cell" ─────────────────────
