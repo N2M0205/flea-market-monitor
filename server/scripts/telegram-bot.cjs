@@ -287,6 +287,10 @@ bot.on('callback_query', async (query) => {
     const sku = data.slice(4);
     await handleAddMonitor(chatId, query, sku);
 
+  // ─── 在庫カテゴリ ───
+  } else if (data.startsWith('cat:')) {
+    await handleCategoryCallback(chatId, userId, query, data);
+
   // ─── 汎用キャンセル ───
   } else if (data === 'cancel') {
     userStates.delete(userId);
@@ -714,7 +718,7 @@ async function handleClearPrice(chatId, kwId, field) {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 📦 在庫アラート
+// 📦 在庫アラート（カテゴリボタン方式）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /** 行単位で maxLen 文字に分割（4096文字制限対応） */
@@ -735,7 +739,21 @@ function splitMessage(text, maxLen) {
   return chunks;
 }
 
-// フォーマットユーティリティ（inventory-alert.cjs の Telegram 版と同じ仕様）
+/** 在庫データキャッシュ（10分TTL） */
+const inventoryCache = new Map();
+const INV_CACHE_TTL = 10 * 60 * 1000;
+
+function _getCachedInventory(chatId) {
+  const entry = inventoryCache.get(chatId);
+  if (!entry || Date.now() > entry.expiresAt) return null;
+  return entry;
+}
+
+function _setInventoryCache(chatId, result, today, leadTime) {
+  inventoryCache.set(chatId, { result, today, leadTime, expiresAt: Date.now() + INV_CACHE_TTL });
+}
+
+// ── フォーマットユーティリティ ──
 function _daysSince(dateStr) {
   if (!dateStr) return 999;
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (24 * 60 * 60 * 1000));
@@ -748,96 +766,210 @@ function _fmtDate(dateStr) {
 function _trendLabel(trend) {
   return { accelerating: '📈加速', stable: '➡️安定', decelerating: '📉減速', new_surge: '⚡急伸', unknown: '⏸不明' }[trend] ?? trend;
 }
-function _fmtCritical(a) {
-  const rem = isFinite(a.effectiveRemainingDays) ? `有効残${a.effectiveRemainingDays.toFixed(1)}日` : '不動';
-  return `  ${a.itemName}（残${a.stock}個/${rem}/${_trendLabel(a.trend)}）`;
-}
-function _fmtWarning(a) {
-  return `  ${a.itemName}（残${a.stock}個/有効残${a.effectiveRemainingDays.toFixed(1)}日/${_trendLabel(a.trend)}）`;
-}
-function _fmtOutOfStock(a) {
-  const days = _daysSince(a.lastSaleDate);
-  const rate = a.effectiveDailyRate28 > 0 ? `実力${a.effectiveDailyRate28.toFixed(1)}個/日` : '販売ゼロ';
-  return `  ${a.itemName}（0個/${rate}/最終${_fmtDate(a.lastSaleDate)}/${days}日前）`;
-}
-function _fmtPriceReview(a) {
-  return `  ${a.itemName}（残${a.stock}個/28日${a.sales28}個→7日${a.sales7}個📉）`;
-}
-function _fmtRecommend(r) {
-  const label = r.reason === 'new_surge' ? '⚡急伸' : '未監視';
-  return `  ${r.itemName}（28日${r.sales28}個/在庫${r.stock}個/${label}）`;
-}
-function _fmtReplenishmentItem(item) {
-  if (item.level === 'out_of_stock') return `  ${item.itemName}: 昨日${item.yesterdaySales}個 → 欠品中！`;
-  const badge = { critical_accelerating: '/🔴危険', critical: '/🔴危険', warning: '/🟡注意', price_review: '/💰価格見直し' }[item.level] || '';
-  return `  ${item.itemName}: 昨日${item.yesterdaySales}個 → ${item.yesterdaySales}個補充（残${item.stock}個${badge}）`;
-}
 
-function buildInventoryMessage(result, today, leadTime) {
+// ── サマリーテキスト（件数のみ） ──
+function buildSummaryText(result, today, leadTime) {
   const { alerts, summary, recommendations, replenishmentList } = result;
-
   const criticalAcc = alerts.filter(a => a.level === 'critical_accelerating');
-  const outOfStock  = alerts.filter(a => a.level === 'out_of_stock');
   const critical    = alerts.filter(a => a.level === 'critical');
   const warning     = alerts.filter(a => a.level === 'warning');
+  const outOfStock  = alerts.filter(a => a.level === 'out_of_stock');
   const priceReview = alerts.filter(a => a.level === 'price_review');
-
-  const outRecent = outOfStock.filter(a => _daysSince(a.lastSaleDate) <= 30);
-  const outOld    = outOfStock.filter(a => _daysSince(a.lastSaleDate) >  30);
+  const outRecent   = outOfStock.filter(a => _daysSince(a.lastSaleDate) <= 30);
+  const outOld      = outOfStock.filter(a => _daysSince(a.lastSaleDate) >  30);
   const totalCritical = criticalAcc.length + critical.length;
-  const L = [];
+  const replenishItems = replenishmentList?.items || [];
+  const replenishQty   = replenishItems.reduce((s, i) => s + i.yesterdaySales, 0);
 
+  const L = [];
   L.push(`📊 在庫日報 ${today}（リードタイム: ${leadTime}日）`);
   L.push('');
-
-  if (criticalAcc.length > 0) {
-    L.push(`🔴📈 仕入れ急げ: ${criticalAcc.length}件`);
-    criticalAcc.forEach(a => L.push(_fmtCritical(a)));
-    L.push('');
-  }
-
-  L.push(`⚫ 欠品中: ${outOfStock.length}件`);
-  if (outRecent.length > 0) outRecent.forEach(a => L.push(_fmtOutOfStock(a)));
-  if (outOld.length > 0) L.push(`  他${outOld.length}件（30日超未販売）`);
-  if (outOfStock.length === 0) L.push('  なし');
+  if (criticalAcc.length > 0) L.push(`🔴📈 仕入れ急げ: ${criticalAcc.length}件`);
+  L.push(`🔴 危険: ${critical.length}件`);
+  L.push(`🟡 注意: ${warning.length}件`);
+  L.push(`⚫ 欠品中: ${outOfStock.length}件（直近30日${outRecent.length}件/30日超${outOld.length}件）`);
+  L.push(`💰 価格見直し: ${priceReview.length}件`);
+  if (replenishItems.length > 0) L.push(`📦 本日補充: ${replenishItems.length}商品/${replenishQty}個`);
+  if (recommendations.length > 0) L.push(`💡 フリマ推奨: ${recommendations.length}件`);
   L.push('');
-
-  if (critical.length > 0) {
-    L.push(`🔴 危険: ${critical.length}件`);
-    critical.forEach(a => L.push(_fmtCritical(a)));
-    L.push('');
-  }
-
-  if (warning.length > 0) {
-    L.push(`🟡 注意: ${warning.length}件`);
-    warning.forEach(a => L.push(_fmtWarning(a)));
-    L.push('');
-  }
-
-  if (priceReview.length > 0) {
-    L.push(`💰 価格見直し: ${priceReview.length}件`);
-    priceReview.slice(0, 5).forEach(a => L.push(_fmtPriceReview(a)));
-    if (priceReview.length > 5) L.push(`  他${priceReview.length - 5}件`);
-    L.push('');
-  }
-
-  L.push(`📋 全体: ${summary.total}件 / 🔴${totalCritical} 🟡${summary.warning} 🟢${summary.ok} ⚫${summary.out_of_stock} 💰${summary.price_review} ⚪${summary.dead_stock}`);
-
-  if (replenishmentList) {
-    const { items, skippedCount } = replenishmentList;
-    if (items.length > 0 || skippedCount > 0) {
-      const totalQty = items.reduce((s, i) => s + i.yesterdaySales, 0);
-      L.push('');
-      L.push('📦 本日補充リスト（前日販売分）');
-      items.forEach(item => L.push(_fmtReplenishmentItem(item)));
-      L.push(`  計: ${items.length}商品 / ${totalQty}個補充`);
-      if (skippedCount > 0) L.push(`  ⏭ スキップ（在庫30日以上）: ${skippedCount}件`);
-    }
-  }
-
-  // 💡 フリマ推奨は別メッセージ（InlineKeyboardボタン付き）で送信するためここでは含めない
-
+  L.push(`📋 全体: ${summary.total}件 🔴${totalCritical} 🟡${summary.warning} 🟢${summary.ok} ⚫${summary.out_of_stock} 💰${summary.price_review} ⚪${summary.dead_stock}`);
   return L.join('\n');
+}
+
+/** サマリー画面のカテゴリ InlineKeyboard */
+function buildCategoryKeyboard(result) {
+  const { alerts, recommendations, replenishmentList } = result;
+  const criticalAcc    = alerts.filter(a => a.level === 'critical_accelerating');
+  const critical       = alerts.filter(a => a.level === 'critical');
+  const warning        = alerts.filter(a => a.level === 'warning');
+  const outOfStock     = alerts.filter(a => a.level === 'out_of_stock');
+  const priceReview    = alerts.filter(a => a.level === 'price_review');
+  const replenishItems = replenishmentList?.items || [];
+
+  const rows = [];
+  const row1 = [];
+  if (criticalAcc.length > 0) row1.push({ text: `🔴📈 急げ (${criticalAcc.length})`,   callback_data: 'cat:critical_acc' });
+  if (critical.length > 0)    row1.push({ text: `🔴 危険 (${critical.length})`,          callback_data: 'cat:critical' });
+  if (row1.length > 0) rows.push(row1);
+
+  const row2 = [];
+  if (warning.length > 0)    row2.push({ text: `🟡 注意 (${warning.length})`,            callback_data: 'cat:warning' });
+  if (outOfStock.length > 0) row2.push({ text: `⚫ 欠品中 (${outOfStock.length})`,        callback_data: 'cat:oos' });
+  if (row2.length > 0) rows.push(row2);
+
+  const row3 = [];
+  if (priceReview.length > 0)    row3.push({ text: `💰 価格見直し (${priceReview.length})`, callback_data: 'cat:price_rev' });
+  if (replenishItems.length > 0) row3.push({ text: `📦 補充リスト (${replenishItems.length})`, callback_data: 'cat:replenish' });
+  if (row3.length > 0) rows.push(row3);
+
+  if (recommendations.length > 0) {
+    rows.push([{ text: `💡 フリマ推奨 (${recommendations.length})`, callback_data: 'cat:recommend' }]);
+  }
+  return rows;
+}
+
+// ── カテゴリ詳細テキストビルダー ──
+const SEP = '─────────────────────';
+
+function buildCriticalAccText(alerts) {
+  const items = alerts.filter(a => a.level === 'critical_accelerating');
+  if (items.length === 0) return '🔴📈 仕入れ急げ: 該当なし';
+  const L = [`🔴📈 仕入れ急げ（${items.length}件）`];
+  for (const a of items) {
+    const rem = isFinite(a.effectiveRemainingDays) ? `有効残${a.effectiveRemainingDays.toFixed(1)}日` : '不動';
+    L.push(SEP);
+    L.push(a.itemName);
+    L.push(`  残${a.stock}個 / 7日日販${a.effectiveDailyRate7.toFixed(2)} / ${rem} / ${_trendLabel(a.trend)}`);
+  }
+  return L.join('\n');
+}
+
+function buildCriticalText(alerts) {
+  const items = alerts.filter(a => a.level === 'critical');
+  if (items.length === 0) return '🔴 危険: 該当なし';
+  const L = [`🔴 危険（${items.length}件）`];
+  for (const a of items) {
+    const rem = isFinite(a.effectiveRemainingDays) ? `有効残${a.effectiveRemainingDays.toFixed(1)}日` : '不動';
+    L.push(SEP);
+    L.push(a.itemName);
+    L.push(`  残${a.stock}個 / ${rem} / ${_trendLabel(a.trend)}`);
+  }
+  return L.join('\n');
+}
+
+function buildWarningText(alerts) {
+  const items = alerts.filter(a => a.level === 'warning');
+  if (items.length === 0) return '🟡 注意: 該当なし';
+  const L = [`🟡 注意（${items.length}件）`];
+  for (const a of items) {
+    L.push(SEP);
+    L.push(a.itemName);
+    L.push(`  残${a.stock}個 / 有効残${a.effectiveRemainingDays.toFixed(1)}日 / ${_trendLabel(a.trend)}`);
+  }
+  return L.join('\n');
+}
+
+/** ⚫ 欠品中（ページネーション付き） */
+function buildOosText(alerts, page) {
+  const items     = alerts.filter(a => a.level === 'out_of_stock');
+  const outRecent = items.filter(a => _daysSince(a.lastSaleDate) <= 30);
+  const outOld    = items.filter(a => _daysSince(a.lastSaleDate) >  30);
+  const PAGE_SIZE  = 20;
+  const totalPages = Math.ceil(outRecent.length / PAGE_SIZE) || 1;
+  const startIdx   = (page - 1) * PAGE_SIZE;
+  const pageItems  = outRecent.slice(startIdx, startIdx + PAGE_SIZE);
+
+  const L = [`⚫ 欠品中（${items.length}件）`];
+  L.push(`直近30日: ${outRecent.length}件 / 30日超: ${outOld.length}件`);
+
+  if (outRecent.length > 0) {
+    L.push('');
+    const endIdx = Math.min(startIdx + PAGE_SIZE, outRecent.length);
+    if (totalPages > 1) {
+      L.push(`📋 直近30日（${page}/${totalPages}ページ / ${startIdx + 1}〜${endIdx}件目）`);
+    } else {
+      L.push(`📋 直近30日（${outRecent.length}件）`);
+    }
+    for (const a of pageItems) {
+      const days = _daysSince(a.lastSaleDate);
+      const rate = a.effectiveDailyRate28 > 0 ? `実力${a.effectiveDailyRate28.toFixed(1)}個/日` : '販売ゼロ';
+      L.push(SEP);
+      L.push(a.itemName);
+      L.push(`  0個 / ${rate} / 最終${_fmtDate(a.lastSaleDate)} / ${days}日前`);
+    }
+  } else {
+    L.push('直近30日の欠品なし');
+  }
+  if (outOld.length > 0) {
+    L.push('');
+    L.push(`📦 30日超未販売: ${outOld.length}件（「30日超一覧」で確認）`);
+  }
+  return { text: L.join('\n'), totalPages, page, hasOld: outOld.length > 0 };
+}
+
+function buildOosOldText(alerts) {
+  const outOld = alerts.filter(a => a.level === 'out_of_stock' && _daysSince(a.lastSaleDate) > 30);
+  if (outOld.length === 0) return '📦 30日超未販売: 該当なし';
+  const L = [`📦 30日超未販売（${outOld.length}件）`];
+  for (const a of outOld) {
+    const days = _daysSince(a.lastSaleDate);
+    L.push(SEP);
+    L.push(a.itemName);
+    L.push(`  0個 / 最終${_fmtDate(a.lastSaleDate)} / ${days}日前`);
+  }
+  return L.join('\n');
+}
+
+function buildPriceRevText(alerts) {
+  const items = alerts.filter(a => a.level === 'price_review');
+  if (items.length === 0) return '💰 価格見直し: 該当なし';
+  const L = [`💰 価格見直し（${items.length}件）`];
+  for (const a of items) {
+    L.push(SEP);
+    L.push(a.itemName);
+    L.push(`  残${a.stock}個 / 28日${a.sales28}個→7日${a.sales7}個📉`);
+  }
+  return L.join('\n');
+}
+
+function buildReplenishText(replenishmentList) {
+  const items       = replenishmentList?.items || [];
+  const skippedCount = replenishmentList?.skippedCount || 0;
+  const yesterdayStr = replenishmentList?.yesterdayStr || '';
+  if (items.length === 0) return '📦 本日補充リスト: 該当なし';
+  const totalQty = items.reduce((s, i) => s + i.yesterdaySales, 0);
+  const L = [`📦 本日補充リスト（${yesterdayStr}）`, `${items.length}商品 / ${totalQty}個`];
+  const badge = { critical_accelerating: '🔴📈', critical: '🔴', warning: '🟡', price_review: '💰', out_of_stock: '⚫' };
+  for (const item of items) {
+    L.push(SEP);
+    L.push(item.itemName);
+    L.push(`  昨日${item.yesterdaySales}個 / 残${item.stock}個 ${badge[item.level] || ''}`);
+  }
+  if (skippedCount > 0) L.push(`\n⏭ スキップ（在庫30日以上）: ${skippedCount}件`);
+  return L.join('\n');
+}
+
+/** ⚫ 欠品中 ページネーション + 戻るボタン */
+function buildOosKeyboard(page, totalPages, hasOld) {
+  const rows = [];
+  const navRow = [];
+  if (page > 1) navRow.push({ text: '◀ 前へ', callback_data: `cat:oos:p${page - 1}` });
+  if (page < totalPages) navRow.push({ text: '次へ ▶', callback_data: `cat:oos:p${page + 1}` });
+  if (navRow.length > 0) rows.push(navRow);
+  if (hasOld) rows.push([{ text: '📦 30日超一覧', callback_data: 'cat:oos:old' }]);
+  rows.push([{ text: '🔙 サマリーに戻る', callback_data: 'cat:back' }]);
+  return rows;
+}
+
+/** カテゴリ詳細を送信（末尾に戻るボタン） */
+async function sendDetailMessage(chatId, text) {
+  const chunks = splitMessage(text, 4000);
+  for (let i = 0; i < chunks.length; i++) {
+    const isLast = i === chunks.length - 1;
+    await bot.sendMessage(chatId, chunks[i], isLast ? {
+      reply_markup: { inline_keyboard: [[{ text: '🔙 サマリーに戻る', callback_data: 'cat:back' }]] }
+    } : {});
+  }
 }
 
 /** キャッシュからSKU→商品名を取得（失敗時はSKUを返す） */
@@ -853,10 +985,16 @@ function getItemNameFromCache(sku) {
 
 /** フリマ推奨を InlineKeyboard ボタン付きで送信 */
 async function sendRecommendations(chatId, recommendations) {
-  if (recommendations.length === 0) return;
+  if (recommendations.length === 0) {
+    await bot.sendMessage(chatId, '💡 フリマ推奨: 該当なし');
+    return;
+  }
 
   const lines = [`💡 フリマ監視おすすめ（${recommendations.length}件）`];
-  recommendations.forEach(r => lines.push(_fmtRecommend(r)));
+  recommendations.forEach(r => {
+    const label = r.reason === 'new_surge' ? '⚡急伸' : '未監視';
+    lines.push(`  ${r.itemName}（28日${r.sales28}個/在庫${r.stock}個/${label}）`);
+  });
 
   const buttons = recommendations.map(r => [{
     text: `➕ 監視追加: ${r.itemName.slice(0, 15)}`,
@@ -924,34 +1062,95 @@ async function handleAddMonitor(chatId, query, sku) {
   }
 }
 
+/** 📦 在庫ボタン → サマリー＋カテゴリボタン表示 */
 async function handleInventory(chatId) {
   try {
-    await bot.sendMessage(chatId, '📦 在庫アラート計算中...');
+    const sentMsg = await bot.sendMessage(chatId, '📦 在庫アラート計算中...');
+    const msgId   = sentMsg.message_id;
 
     const service = new InventoryAlertService();
-    const result = await service.generateAlert();
+    const result  = await service.generateAlert();
 
     const today = new Date().toLocaleDateString('ja-JP', {
       timeZone: 'Asia/Tokyo',
       year: 'numeric', month: '2-digit', day: '2-digit',
     }).replace(/\//g, '-');
+    const leadTime = service.defaultLeadTime;
 
-    const msg = buildInventoryMessage(result, today, service.defaultLeadTime);
-    const chunks = splitMessage(msg, 4096);
+    _setInventoryCache(chatId, result, today, leadTime);
 
-    for (let i = 0; i < chunks.length; i++) {
-      if (i === chunks.length - 1) {
-        await replyWithKeyboard(chatId, chunks[i]);
-      } else {
-        await bot.sendMessage(chatId, chunks[i]);
-      }
-    }
+    const summaryText = buildSummaryText(result, today, leadTime);
+    const keyboard    = buildCategoryKeyboard(result);
 
-    // 推奨リストをボタン付き別メッセージで送信
-    await sendRecommendations(chatId, result.recommendations);
+    await bot.editMessageText(summaryText, {
+      chat_id: chatId,
+      message_id: msgId,
+      reply_markup: { inline_keyboard: keyboard },
+    });
   } catch (err) {
     console.error('[telegram-bot] 在庫アラートエラー:', err.message);
     await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
+  }
+}
+
+/** カテゴリボタン押下ハンドラ */
+async function handleCategoryCallback(chatId, userId, query, data) {
+  const msgId = query.message.message_id;
+
+  // 🔙 戻る → この詳細メッセージを削除
+  if (data === 'cat:back') {
+    try { await bot.deleteMessage(chatId, msgId); } catch {}
+    return;
+  }
+
+  // キャッシュ確認
+  const cached = _getCachedInventory(chatId);
+  if (!cached) {
+    await bot.sendMessage(chatId, '⏳ データが期限切れです。📦 在庫ボタンを再度押してください');
+    return;
+  }
+
+  const { result } = cached;
+  const { alerts, recommendations, replenishmentList } = result;
+
+  if (data === 'cat:critical_acc') {
+    await sendDetailMessage(chatId, buildCriticalAccText(alerts));
+
+  } else if (data === 'cat:critical') {
+    await sendDetailMessage(chatId, buildCriticalText(alerts));
+
+  } else if (data === 'cat:warning') {
+    await sendDetailMessage(chatId, buildWarningText(alerts));
+
+  } else if (data === 'cat:oos' || data.startsWith('cat:oos:p')) {
+    const page = data === 'cat:oos' ? 1 : parseInt(data.slice('cat:oos:p'.length), 10);
+    const { text, totalPages, hasOld } = buildOosText(alerts, page);
+    const keyboard = buildOosKeyboard(page, totalPages, hasOld);
+    if (data === 'cat:oos') {
+      await bot.sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard } });
+    } else {
+      // ページング → 現在のメッセージを編集
+      try {
+        await bot.editMessageText(text, {
+          chat_id: chatId, message_id: msgId,
+          reply_markup: { inline_keyboard: keyboard },
+        });
+      } catch {
+        await bot.sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard } });
+      }
+    }
+
+  } else if (data === 'cat:oos:old') {
+    await sendDetailMessage(chatId, buildOosOldText(alerts));
+
+  } else if (data === 'cat:price_rev') {
+    await sendDetailMessage(chatId, buildPriceRevText(alerts));
+
+  } else if (data === 'cat:replenish') {
+    await sendDetailMessage(chatId, buildReplenishText(replenishmentList));
+
+  } else if (data === 'cat:recommend') {
+    await sendRecommendations(chatId, recommendations);
   }
 }
 
