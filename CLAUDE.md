@@ -61,9 +61,12 @@
 - LINE通知はスリム化済み（🔴即対応+⚫欠品+📦補充+📋集計のみ）。詳細はTelegramで確認
 - 上限仕入価格: ≤3000円は固定300円利益（×0.9-送料-300）、>3000円は利益率12%（×0.78-送料）
 - デフォルトリードタイム: 5日（process.env.DEFAULT_LEAD_TIME || '5'）
-- Telegram 📦在庫ボタン: telegram-bot.cjs で handleInventory() → generateAlert() → buildInventoryMessage() + sendRecommendations()
+- Telegram 📦在庫ボタン: サマリー（件数のみ）＋カテゴリ InlineKeyboard 方式。handleInventory() → editMessageText でサマリー表示 → カテゴリボタン押下で詳細を新メッセージ送信
+- カテゴリ詳細は editMessageText ではなく新メッセージ送信（長さ超過時の対策）。戻るボタンは deleteMessage で詳細を削除
+- 在庫アラート結果は10分 TTL キャッシュ（inventoryCache Map）で保持。連続ボタン操作時の再計算を防ぐ
+- ⚫欠品中は直近30日/30日超で分離表示。直近30日は20件/ページのページネーション（cat:oos:pN）
 - フリマ推奨の即追加: callback_data 'add:{sku}' → handleAddMonitor() → Keyword.create() + editMessageReplyMarkup でボタン更新
-- InlineKeyboard callback_data は64バイト制限。'add:{sku}' 形式で十分短い
+- InlineKeyboard callback_data は64バイト制限。'cat:xxx' / 'add:{sku}' 形式で十分短い
 - telegram-bot.cjs の node_modules は server/ 配下（プロジェクトルートからは見えない）
 
 ## 既知の未解決課題

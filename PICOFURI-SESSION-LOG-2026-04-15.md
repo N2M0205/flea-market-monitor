@@ -146,3 +146,10 @@
 - 欠品期間は販売ペース計算から除外すべき（実力日販の正確性）
 - telegram-bot.cjsの node_modules は server/ 配下（プロジェクトルートからは見えない）
 - InlineKeyboard callback_data は64バイト制限。'add:{sku}' 形式で十分
+
+### ✅ 12. Telegram 📦在庫カテゴリボタン化
+ブランチ: feat/telegram-inventory-categories → master (b9c5e4f)
+- サマリー1メッセージ+カテゴリボタンでUI改善
+- ⚫欠品中は20件/ページのページネーション
+- 詳細は商品名+数値の2行表示、区切り線で視認性向上
+- 在庫アラート結果を10分キャッシュ（連続操作対策）
