@@ -74,10 +74,41 @@
 
 ## 未完了・オーナー判断待ち項目
 
-- 🔴 **新規PM2プロセス本番登録**
-  - `crossmall-items-sync`: `node server/scripts/sync-crossmall-items.cjs`（cron `30 3 * * *` 推奨）
-  - `crossmall-stock-sync`: `node server/scripts/sync-crossmall-stock.cjs`（cron `*/30 * * * *` 推奨）
-- 🔴 **master へのマージ**（承認後）
-- 🔴 **既存 `crossmall-sync` プロセスの restart**（Phase 5変更反映のため）
+- 🔴 **Step 3d: picofuri-backend restart**（ScrapingService の CrossmallDbService 切り替えを本番反映）← **次のアクション**
 - 🟡 **Phase 7（JSON廃止）の実施判断**: `data/crossmall_sales_history.json` は現在も並行書き込み中。DB安定確認後に削除可
 - 🟡 **`2314-001247n` の在庫マスタ登録**: purchase_master_cacheに追加すれば次回sync時に自動反映
+- 🟡 **別issue: CROSSMALL バルクAPI 署名バグ修正**: `generateSigning()` に URL エンコード漏れあり。修正で `get_diff_stock` 差分同期が有効になりstock-sync が高速化
+- 🟡 **別issue: crossmall-items-sync 差分判定**: 現行は item_name 未取得ベース（新規SKU検知は動作する）
+
+---
+
+## Step 3a〜3c 完了記録（2026-04-17）
+
+### Step 3a: crossmall-sync restart ✅
+- `pm2 restart crossmall-sync --update-env` 実施
+- restart 直後に自動 sync が実行、新規5件を JSON + DB 両方に書き込み確認（Phase 5 双方書き込み正常）
+- crossmall_sales: 9,762 → 9,767件
+
+### Step 3b: crossmall-items-sync PM2 登録 ✅
+- `pm2 start ... --name crossmall-items-sync --cron "30 3 * * *" --no-autorestart`
+- id=8、cron `30 3 * * *` 確認・pm2 save 完了
+- 手動実行2回: 全件取得済みのため即終了（1秒）、差分なし動作確認
+
+### Step 3c: crossmall-stock-sync PM2 登録 ✅
+- `pm2 start ... --name crossmall-stock-sync --cron "*/30 * * * *" --no-autorestart`
+- id=9、cron `*/30 * * * *` 確認・pm2 save 完了
+- 手動実行2回: 162件 UPSERT、172〜177秒、エラーなし
+- **cron 自動実行確認済み**:
+  - 18:00 JST（9:00 UTC）発火 → UPSERT 162件 / 185.4秒（初回のみ二重起動あり、PM2既知挙動）
+  - 18:30 JST（9:30 UTC）発火 → UPSERT 162件 / 199.6秒（単発起動、正常）
+  - unstable restarts: 1 → 0（リセット確認）
+  - DB synced_at: 09:30:01 UTC に更新確認
+
+### PM2 プロセス最終構成
+| id | name | cron | status |
+|---|---|---|---|
+| 1 | crossmall-sync | `0 */2 * * *` | stopped（正常） |
+| 8 | crossmall-items-sync | `30 3 * * *` | stopped（正常） |
+| 9 | crossmall-stock-sync | `*/30 * * * *` | stopped（正常） |
+| 4 | picofuri-backend | 常時 | online |
+| 5 | telegram-bot | 常時 | online |
