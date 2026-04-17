@@ -20,6 +20,11 @@ const AuditLog = require('./AuditLog')(sequelize, DataTypes);
 // ★追加：LINE連携コード
 const LineLinkCode = require('./LineLinkCode')(sequelize, DataTypes);
 
+// CROSSMALL DBモデル
+const CrossmallItem  = require('./CrossmallItem')(sequelize, DataTypes);
+const CrossmallStock = require('./CrossmallStock')(sequelize, DataTypes);
+const CrossmallSale  = require('./CrossmallSale')(sequelize, DataTypes);
+
 // リレーションシップの定義
 // Users 1:N Keywords
 User.hasMany(Keyword, { foreignKey: 'user_id', as: 'keywords' });
@@ -59,6 +64,11 @@ Notification.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 // User.hasMany(LineLinkCode, { foreignKey: 'user_id', as: 'lineLinkCodes' });
 // LineLinkCode.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// CROSSMALL アソシエーション
+CrossmallItem.associate({ CrossmallStock, CrossmallSale });
+CrossmallStock.associate({ CrossmallItem });
+CrossmallSale.associate({ CrossmallItem });
+
 // エクスポート
 const db = {
   sequelize,
@@ -70,7 +80,10 @@ const db = {
   PriceHistory,
   Setting,
   AuditLog,
-  LineLinkCode
+  LineLinkCode,
+  CrossmallItem,
+  CrossmallStock,
+  CrossmallSale,
 };
 
 module.exports = db;

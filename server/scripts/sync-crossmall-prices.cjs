@@ -19,6 +19,53 @@ const CrossmallService = require('../services/CrossmallService');
 const purchaseMasterCache = require('../services/PurchaseMasterCache');
 const salesHistory = require('../services/CrossmallSalesHistory');
 
+// Phase 5: crossmall_sales DB書き込み用
+let _db = null;
+async function getDb() {
+  if (!_db) {
+    _db = require('../models');
+    await _db.sequelize.authenticate();
+  }
+  return _db;
+}
+
+async function upsertSaleToDb(orderNumber, orderDate, deliveryType, details) {
+  try {
+    const db = await getDb();
+    const now = new Date();
+    // item_code ソートで line_no を確定（migrate-sales-history.cjs と同方式）
+    const sorted = [...details].sort((a, b) =>
+      (a.item_code || '').localeCompare(b.item_code || '')
+    );
+    const rows = sorted.map((d, i) => {
+      const unitPrice = Math.round(d.unit_price || 0);
+      return {
+        order_number: orderNumber,
+        line_no: i + 1,
+        item_code: d.item_code,
+        order_date: new Date(orderDate + 'T00:00:00Z'),
+        amount: 1,
+        unit_price: unitPrice,
+        amount_price: unitPrice,
+        delivery_type: deliveryType || null,
+        synced_at: now,
+        created_at: now,
+        updated_at: now,
+      };
+    });
+    if (rows.length > 0) {
+      await db.CrossmallSale.bulkCreate(rows, {
+        updateOnDuplicate: [
+          'item_code', 'order_date', 'amount', 'unit_price',
+          'amount_price', 'delivery_type', 'synced_at', 'updated_at',
+        ],
+      });
+    }
+  } catch (err) {
+    console.warn(`  ⚠️ DB UPSERT失敗 (${orderNumber}): ${err.message}`);
+  }
+}
+
 const INITIAL_FETCH_DAYS = 90;  // 初回取得期間
 const FETCH_MARGIN_DAYS = 2;    // 差分取得時のマージン（取りこぼし防止）
 const PRUNE_DAYS = 90;          // これより古い販売レコードを削除
@@ -185,6 +232,8 @@ async function main() {
 
     if (orderDate && details.length > 0) {
       salesHistory.addOrder(orderNumber, orderDate, meta?.deliveryType || '', details);
+      // Phase 5: DBにも並行して書き込み（JSON書き込みはそのまま維持）
+      await upsertSaleToDb(orderNumber, orderDate, meta?.deliveryType || '', details);
     }
 
     processed++;

@@ -7,8 +7,7 @@
 //
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-const CrossmallService = require('./CrossmallService');
-const purchaseMasterCache = require('./PurchaseMasterCache');
+const CrossmallDbService = require('./CrossmallDbService');
 
 // 送料辞書（CROSSMALL delivery_type_name → 送料）
 const SHIPPING_COST_MAP = {
@@ -45,13 +44,6 @@ class LineNotificationService {
 
     this._client        = null;
     this._clientPromise = null;
-
-    try {
-      this.crossmall = new CrossmallService();
-    } catch (e) {
-      console.warn('⚠️ CrossmallService 初期化に失敗:', e?.message || e);
-      this.crossmall = null;
-    }
 
     if (!this.config.channelAccessToken || !this.config.channelSecret) {
       console.warn('⚠️ LINE認証情報が未設定です（LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET）');
@@ -224,17 +216,18 @@ class LineNotificationService {
 
       let crossmallInfo = null;
       if (keyword?.crossmall_item_code) {
-        const master = purchaseMasterCache.getMasterItem(keyword.crossmall_item_code);
-        if (master) {
+        const baseCode = CrossmallDbService.deriveBaseCode(keyword.crossmall_item_code);
+        const dbInfo = await CrossmallDbService.getStockAndPriceByBaseCode(baseCode).catch(() => null);
+        if (dbInfo) {
           crossmallInfo = {
-            item_code: keyword.crossmall_item_code,
-            stock: master.stock ?? null,
-            price: master.lastSalePrice ?? null,
-            sales28: master.sales28 ?? 0,
-            sales7: master.sales7 ?? 0,
-            lastSaleDate: master.lastSaleDate ?? null,
-            deliveryType: master.deliveryType ?? null,
-            item_name: null,
+            item_code:    keyword.crossmall_item_code,
+            stock:        dbInfo.stock ?? null,
+            price:        dbInfo.lastSalePrice ?? null,
+            sales28:      dbInfo.sales28 ?? 0,
+            sales7:       dbInfo.sales7  ?? 0,
+            lastSaleDate: dbInfo.lastSaleDate ?? null,
+            deliveryType: dbInfo.deliveryType ?? null,
+            item_name:    dbInfo.item_name ?? null,
           };
         }
       }
@@ -262,16 +255,10 @@ class LineNotificationService {
     const displayProducts = products.slice(0, maxDisplay);
     const remainingCount  = products.length - maxDisplay;
 
-    const purchaseMasterCache = require('./PurchaseMasterCache');
-    const master = keyword?.crossmall_item_code ? purchaseMasterCache.getMasterItem(keyword.crossmall_item_code) : null;
-
     const stock         = crossmallInfo?.stock  ?? null;
     const sales28       = crossmallInfo?.sales28 ?? null;
-    const lastSalePrice = crossmallInfo?.price != null ? Number(crossmallInfo.price)
-                        : master?.lastSalePrice != null ? Number(master.lastSalePrice)
-                        : null;
-
-    const deliveryType = crossmallInfo?.deliveryType || master?.deliveryType || '';
+    const lastSalePrice = crossmallInfo?.price != null ? Number(crossmallInfo.price) : null;
+    const deliveryType  = crossmallInfo?.deliveryType || '';
     const shippingCost = getShippingCost(deliveryType);
 
     let msg = `🆕 "${keyword?.keyword || '（不明）'}" の新着\n`;
@@ -286,11 +273,12 @@ class LineNotificationService {
       msg += `📍 ${platform}\n`;
       msg += `🔗 ${p.url}\n`;
 
-      if (crossmallInfo || master) {
-        const dispStock = stock ?? master?.stock ?? null;
-        const dispSales = sales28 ?? master?.sales28 ?? null;
-        const dispSales7 = master?.sales7 ?? null;
-        const dispLastDate = master?.lastSaleDate ? master.lastSaleDate.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1/$2') : '─';
+      if (crossmallInfo) {
+        const dispStock   = stock ?? null;
+        const dispSales   = sales28 ?? null;
+        const dispSales7  = crossmallInfo?.sales7 ?? null;
+        const dispLastDate = crossmallInfo?.lastSaleDate
+          ? crossmallInfo.lastSaleDate.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1/$2') : '─';
         msg += `📦 在庫${dispStock != null ? dispStock : '─'}個 | 28日${dispSales != null ? dispSales : '─'}個 | 7日${dispSales7 != null ? dispSales7 : '─'}個 | 最終${dispLastDate}\n`;
         msg += `💰 直近販売¥${lastSalePrice != null ? lastSalePrice.toLocaleString() : '─'}\n`;
         if (lastSalePrice != null && price > 0) {

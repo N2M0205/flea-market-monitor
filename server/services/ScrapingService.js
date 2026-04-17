@@ -12,7 +12,7 @@ const YahooFleaScraper         = require('./YahooFleaScraper');
 const LineNotificationService  = require('./LineNotificationService');
 
 const { loadLayerAConfig, layerAFilter, calcRarityScore } = require('./LayerAFilterService');
-const purchaseMasterCache = require('./PurchaseMasterCache');
+const CrossmallDbService = require('./CrossmallDbService');
 const { log: runLog } = require('../src/utils/RunLogger');
 
 // ============================================================
@@ -384,24 +384,25 @@ class ScrapingService {
     }
     console.log(`  💾 ${newProducts.length}件の新規商品を保存しました`);
 
-    // ④ CROSSMALL情報取得（キャッシュ参照 — API呼び出しなし）
+    // ④ CROSSMALL情報取得（DBから — API呼び出しなし）
     let crossmallInfo = null;
     if (keyword.crossmall_item_code) {
-      const master = purchaseMasterCache.getMasterItem(keyword.crossmall_item_code);
-      if (master) {
+      const baseCode = CrossmallDbService.deriveBaseCode(keyword.crossmall_item_code);
+      const dbInfo = await CrossmallDbService.getStockAndPriceByBaseCode(baseCode);
+      if (dbInfo) {
         crossmallInfo = {
-          item_code: keyword.crossmall_item_code,
-          stock: master.stock ?? null,
-          price: master.lastSalePrice ?? null,
-          sales28: master.sales28 ?? 0,
-          sales7: master.sales7 ?? 0,
-          lastSaleDate: master.lastSaleDate ?? null,
-          deliveryType: master.deliveryType ?? null,
-          item_name: null,
+          item_code:    keyword.crossmall_item_code,
+          stock:        dbInfo.stock ?? null,
+          price:        dbInfo.lastSalePrice ?? null,
+          sales28:      dbInfo.sales28 ?? 0,
+          sales7:       dbInfo.sales7  ?? 0,
+          lastSaleDate: dbInfo.lastSaleDate ?? null,
+          deliveryType: dbInfo.deliveryType ?? null,
+          item_name:    dbInfo.item_name ?? null,
         };
-        console.log('  ✅ CROSSMALL情報（キャッシュ）:', crossmallInfo);
+        console.log('  ✅ CROSSMALL情報（DB）:', crossmallInfo);
       } else {
-        console.log(`  ⚠️ CROSSMALL キャッシュなし: ${keyword.crossmall_item_code}`);
+        console.log(`  ⚠️ CROSSMALL DB未登録: ${keyword.crossmall_item_code}`);
       }
     }
 
@@ -426,12 +427,11 @@ class ScrapingService {
       console.log(`  ✅ Layer A 通過: "${product.title}"`);
       runLog(`  ✅ Layer A合格 [${keyword.keyword}/${platform}]: "${product.title}" ¥${product.price}`);
 
-      const master = purchaseMasterCache.getMasterItem(keyword.crossmall_item_code);
-      const stockDisplay =
-        crossmallInfo?.stock != null ? crossmallInfo.stock :
-        master?.stock        != null ? master.stock        : null;
-      const sales28 = master?.sales28 ?? null;
+      // crossmallInfo は DB から取得済み（上の ④ で設定）
+      const stockDisplay = crossmallInfo?.stock ?? null;
+      const sales28 = crossmallInfo?.sales28 ?? null;
       const rarity  = calcRarityScore(sales28);
+      const master  = crossmallInfo;
 
       if (!enabled) {
         console.log('  ℹ️ LINE通知は無効化されています');
