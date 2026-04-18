@@ -35,7 +35,7 @@ class CrossmallService {
    */
   generateSigning(params) {
     const sortedKeys = Object.keys(params).sort();
-    const parts = sortedKeys.map(key => `${key}=${params[key]}`);
+    const parts = sortedKeys.map(key => `${key}=${encodeURIComponent(String(params[key]))}`);
     const queryString = parts.join('&');
     const stringToSign = queryString + this.config.authKey;
     const signing = crypto.createHash('md5').update(stringToSign, 'utf8').digest('hex');

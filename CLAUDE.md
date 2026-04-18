@@ -72,7 +72,9 @@
 - telegram-bot.cjs の node_modules は server/ 配下（プロジェクトルートからは見えない）
 - 通知経路（ScrapingService）は CrossmallDbService 経由の DB参照のみ。CROSSMALL API直叩きは同期スクリプト（crossmall-sync / crossmall-stock-sync / crossmall-items-sync）内でのみ使用
 - CrossmallDbService.deriveBaseCode() が末尾 `n` サフィックスを除去し base_code を導出。getStockAndPriceByBaseCode(baseCode) で同一商品の複数SKU在庫・販売数を集約して返す
-- CROSSMALL 署名生成バグ: generateSigning() はパラメータ値を rawのまま連結するが axios は URLエンコードして送信するためサーバ側と不一致になる。日付文字列（`/` 含む）を渡すと認証エラー。修正は encodeURIComponent() 適用（Issue A）
+- CROSSMALL 署名生成バグ: generateSigning() はパラメータ値を rawのまま連結するが axios は URLエンコードして送信するためサーバ側と不一致になる。予防的修正済み（encodeURIComponent 適用、2026-04-18）。ただし現行の全 makeRequest() 呼び出しは ASCII 安全パラメータのみのため本番影響なし（Issue A 閉じ）
+- Issue A'（未解決）: get_diff_stock / get_item の updated_at_fr に HH:MM:SS 付き datetime を渡すと、署名方式によらず「認証エラー」。raw/%20/+ いずれの署名でも同一エラー → CROSSMALL サーバー側バリデーション。YYYY-MM-DD（日付のみ）は認証OK だが TotalResult=0 で運用不可。真因は要 CROSSMALL 問合せ
+- Issue A''（未解決）: crossmall-stock-sync は 162件を1件ずつ get_stock（1秒間隔）で取得、約3分。get_diff_stock が使えれば30秒未満になる見込みだが Issue A' により未実現。代替高速化として待機を500ms→250msに短縮する余地あり
 - picofuri-backend restart タイミング: スキャン間隔 10分・実行時間 250秒 → 空白 3〜4分。「次回実行予定」ログで空白確認後に restart すれば数秒で完了しスキャン欠落なし
 
 ## 既知の未解決課題

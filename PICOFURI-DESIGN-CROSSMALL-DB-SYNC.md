@@ -173,11 +173,27 @@ function deriveBaseCode(itemCode) {
 
 | 同期対象 | API | 備考 |
 |---|---|---|
-| 商品マスタ | `get_item` | `updated_at_fr` 指定で差分取得 |
-| 在庫差分 | `get_diff_stock` | `updated_at_fr` 指定で差分取得（30分同期でも軽量） |
+| 商品マスタ | `get_item` | `item_code` 指定の1件取得のみ実動確認済み |
+| 在庫 | `get_stock` | `item_code` 指定の1件取得（162件ループ、約3分） |
+| 在庫差分 | `get_diff_stock` | ⚠️ `updated_at_fr` に時刻成分を含むと認証エラー（Issue A'）。現行未使用 |
 | 受注 | `get_order` | 既存 `sync-crossmall-prices.cjs` 流用 |
 
 仕様: プロジェクト知識 `webapi2_202405291300_v2_2_44_1.pdf`
+
+### 3.3 署名バグ調査結果（Issue A / 2026-04-18 完了）
+
+**generateSigning() のバグ（予防的修正済み）**
+- 旧コード: `${key}=${params[key]}` — raw値を直接連結
+- 新コード: `${key}=${encodeURIComponent(String(params[key]))}` — URLエンコード適用
+- 現行の全 `makeRequest()` 呼び出しは ASCII 安全パラメータのみ（item_code / YYYY-MM-DD / order_number）のため raw == encoded → 本番影響なし
+- コミット: `89ef7ac` (fix/crossmall-signing-prevention → master)
+
+**get_diff_stock / get_item (差分) が使えない理由 (Issue A')**
+- `updated_at_fr='YYYY-MM-DD HH:MM:SS'` を渡すと 3 種類の署名方式（raw / %20 / +）すべてで「認証エラー」
+- 3 種の署名はすべて異なる値 → サーバーが署名検証前にリクエストを弾いている
+- `YYYY-MM-DD`（時刻なし）は認証 OK / TotalResult=0（フィルタ機能せず）
+- 結論: **CROSSMALL サーバー側のバリデーション仕様** であり、クライアント側の署名修正では解決不可
+- 対処: CROSSMALL サポートへの問合せ推奨（仕様書で datetime フォーマット要確認）
 
 ---
 
