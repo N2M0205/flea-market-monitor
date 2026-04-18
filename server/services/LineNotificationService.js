@@ -302,7 +302,7 @@ class LineNotificationService {
       const { Product } = require('../models');
       const ids = products.map((p) => p.id).filter(Boolean);
       if (ids.length === 0) return;
-      await Product.update({ is_notified: true }, { where: { id: ids } });
+      await Product.update({ notified: true }, { where: { id: ids } });
       console.log(`✅ ${ids.length} 件の商品を通知済みに更新しました`);
     } catch (e) {
       console.error('❌ 通知済み更新エラー:', e);
