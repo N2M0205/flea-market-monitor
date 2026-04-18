@@ -26,8 +26,9 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 process.chdir(path.join(__dirname, '..'));
 
 const TelegramBot = require('node-telegram-bot-api');
+const { Op } = require('sequelize');
 const db = require('../models');
-const { sequelize, Keyword, Product, User } = db;
+const { sequelize, Keyword, Product, User, CrossmallItem } = db;
 const InventoryAlertService = require('../services/InventoryAlertService');
 const INVENTORY_CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'purchase_master_cache.json');
 
@@ -202,7 +203,7 @@ bot.on('callback_query', async (query) => {
 
   // ─── 追加フロー ───
   if (data === 'skip_sku') {
-    userStates.set(userId, { ...state, sku: null, step: 'add_price' });
+    userStates.set(userId, { ...state, sku: null, item_codes: [], step: 'add_price' });
     await bot.sendMessage(chatId, '最低価格を入力してください（例: 1500）', {
       reply_markup: {
         inline_keyboard: [[{ text: '⏭ スキップ（制限なし）', callback_data: 'skip_price' }]]
@@ -223,6 +224,20 @@ bot.on('callback_query', async (query) => {
 
   } else if (data === 'add_confirm') {
     await handleAddConfirm(chatId, userId);
+
+  // ─── 登録フロー（検索→マルチ選択） ───
+  } else if (data.startsWith('reg:sel:')) {
+    const itemCode = data.slice('reg:sel:'.length);
+    await handleRegToggle(chatId, userId, query, itemCode);
+
+  } else if (data === 'reg:done') {
+    await handleRegDone(chatId, userId);
+
+  } else if (data === 'reg:research') {
+    await handleRegResearch(chatId, userId);
+
+  } else if (data === 'noop') {
+    // 選択済みボタンの再タップは無視（answerCallbackQuery で視覚フィードバックのみ）
 
   // ─── 削除フロー ───
   } else if (data.startsWith('delete_select_')) {
@@ -332,20 +347,15 @@ async function handleAddStart(chatId, userId) {
 
 async function handleStateFlow(chatId, userId, text, state) {
   if (state.step === 'add_keyword') {
-    userStates.set(userId, { ...state, keyword: text, step: 'add_sku' });
-    await bot.sendMessage(chatId, '商品コード（SKU）を入力してください', {
+    userStates.set(userId, { ...state, keyword: text, step: 'reg:search', selectedItems: new Set() });
+    await bot.sendMessage(chatId, '🔍 紐付ける商品名の一部を入力してください（例: セノッピー）\n\nスキップすると SKU 紐付けなしで登録されます', {
       reply_markup: {
         inline_keyboard: [[{ text: '⏭ スキップ（SKUなし）', callback_data: 'skip_sku' }]]
       }
     });
 
-  } else if (state.step === 'add_sku') {
-    userStates.set(userId, { ...state, sku: text, step: 'add_price' });
-    await bot.sendMessage(chatId, '最低価格を入力してください（例: 1500）', {
-      reply_markup: {
-        inline_keyboard: [[{ text: '⏭ スキップ（制限なし）', callback_data: 'skip_price' }]]
-      }
-    });
+  } else if (state.step === 'reg:search') {
+    await handleRegSearchQuery(chatId, userId, text, state);
 
   } else if (state.step === 'add_price') {
     const price = parseInt(text, 10);
@@ -389,12 +399,13 @@ async function showAddConfirm(chatId, userId) {
   const state = userStates.get(userId);
   const priceText = state.price != null ? `¥${state.price.toLocaleString()}` : 'なし';
   const maxPriceText = state.max_price != null ? `¥${state.max_price.toLocaleString()}` : 'なし';
-  const skuText = state.sku || 'なし';
+  const codes = state.item_codes || [];
+  const codesText = codes.length > 0 ? codes.join(', ') : 'なし';
 
   const confirmText =
     `以下の内容で追加しますか？\n` +
     `キーワード: ${state.keyword}\n` +
-    `商品コード: ${skuText}\n` +
+    `商品コード(${codes.length}件): ${codesText}\n` +
     `最低価格: ${priceText}\n` +
     `上限価格: ${maxPriceText}\n` +
     `監視: メルカリ + Yahoo`;
@@ -425,21 +436,191 @@ async function handleAddConfirm(chatId, userId) {
       return;
     }
 
+    const codes = state.item_codes || [];
     await Keyword.create({
       user_id: dbUserId,
       keyword: state.keyword,
-      crossmall_item_code: state.sku || null,
-      min_price: state.price != null ? state.price : null,
-      max_price: state.max_price != null ? state.max_price : null,
+      crossmall_item_code: codes.length > 0 ? codes[0] : null,
+      item_codes: codes.length > 0 ? codes.join(',') : null,
+      min_price: state.price != null ? state.price : 0,
+      max_price: state.max_price != null ? state.max_price : 999999,
       platforms: JSON.stringify(['mercari', 'yahoo_flea']),
       is_active: true
     });
 
-    await replyWithKeyboard(chatId, `✅ キーワード追加完了\n「${state.keyword}」を登録しました`);
+    const codeSummary = codes.length > 0 ? `（SKU ${codes.length}件紐付け: ${codes.join(', ')}）` : '（SKU未紐付け）';
+    await replyWithKeyboard(chatId, `✅ キーワード追加完了\n「${state.keyword}」を登録しました${codeSummary}`);
   } catch (err) {
     console.error('[telegram-bot] キーワード追加エラー:', err.message);
     await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
   }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📝 登録フロー（検索→マルチ選択）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const REG_SEARCH_LIMIT = 50;
+
+function buildSearchResultsText(state) {
+  return `🔍 「${state.searchQuery}」の検索結果: ${state.searchResults.length}件\n\n` +
+    `下のボタンをタップして紐付ける商品を選択してください\n` +
+    `（同じ base_code の n 変種は自動で抱き合わせ選択されます）\n\n` +
+    `現在 ${state.selectedItems.size} 件選択中`;
+}
+
+function buildSearchResultsKeyboard(state) {
+  const rows = state.searchResults.map(item => {
+    const selected = state.selectedItems.has(item.item_code);
+    const mark = selected ? '☑' : '⬜';
+    const maxNameLen = 36;
+    const name = item.item_name.length > maxNameLen
+      ? item.item_name.slice(0, maxNameLen - 1) + '…'
+      : item.item_name;
+    return [{
+      text: `${mark} ${item.item_code} ${name}`,
+      callback_data: `reg:sel:${item.item_code}`,
+    }];
+  });
+  rows.push([
+    { text: `✅ 完了 (${state.selectedItems.size}件)`, callback_data: 'reg:done' },
+    { text: '🔍 再検索', callback_data: 'reg:research' },
+    { text: '❌ キャンセル', callback_data: 'cancel' },
+  ]);
+  return rows;
+}
+
+async function findBundledItemCodes(itemCode) {
+  const baseCode = CrossmallItem.deriveBaseCode(itemCode);
+  const related = await CrossmallItem.findAll({
+    where: { base_code: baseCode },
+    attributes: ['item_code'],
+  });
+  return related.map(r => r.item_code);
+}
+
+async function handleRegSearchQuery(chatId, userId, text, state) {
+  const query = text.trim();
+  if (query.length === 0) {
+    await bot.sendMessage(chatId, '検索キーワードを入力してください');
+    return;
+  }
+
+  try {
+    const results = await CrossmallItem.findAll({
+      where: { item_name: { [Op.like]: `%${query}%` } },
+      limit: REG_SEARCH_LIMIT + 1,
+      order: [['item_code', 'ASC']],
+    });
+
+    if (results.length === 0) {
+      await bot.sendMessage(chatId, `🔍 「${query}」の検索結果: 0件\n\n別のキーワードを入力してください`, {
+        reply_markup: {
+          inline_keyboard: [[{ text: '⏭ スキップ（SKUなし）', callback_data: 'skip_sku' }]],
+        },
+      });
+      return;
+    }
+
+    if (results.length > REG_SEARCH_LIMIT) {
+      await bot.sendMessage(chatId,
+        `⚠️ 「${query}」の検索結果が${REG_SEARCH_LIMIT + 1}件以上ヒットしました\nキーワードを絞って再入力してください`, {
+        reply_markup: {
+          inline_keyboard: [[{ text: '⏭ スキップ（SKUなし）', callback_data: 'skip_sku' }]],
+        },
+      });
+      return;
+    }
+
+    const selectedItems = state.selectedItems instanceof Set ? state.selectedItems : new Set();
+
+    const newState = {
+      ...state,
+      step: 'reg:select',
+      searchQuery: query,
+      searchResults: results.map(r => ({
+        item_code: r.item_code,
+        item_name: r.item_name,
+        base_code: r.base_code,
+      })),
+      selectedItems,
+    };
+    userStates.set(userId, newState);
+
+    await bot.sendMessage(chatId, buildSearchResultsText(newState), {
+      reply_markup: { inline_keyboard: buildSearchResultsKeyboard(newState) },
+    });
+  } catch (err) {
+    console.error('[telegram-bot] 商品検索エラー:', err.message);
+    await bot.sendMessage(chatId, `❌ 検索エラー: ${err.message}`);
+  }
+}
+
+async function handleRegToggle(chatId, userId, query, itemCode) {
+  const state = userStates.get(userId);
+  if (!state || state.step !== 'reg:select') return;
+
+  try {
+    const bundled = await findBundledItemCodes(itemCode);
+    const wasSelected = state.selectedItems.has(itemCode);
+    if (wasSelected) {
+      for (const code of bundled) state.selectedItems.delete(code);
+    } else {
+      for (const code of bundled) state.selectedItems.add(code);
+    }
+    userStates.set(userId, state);
+
+    try {
+      await bot.editMessageText(buildSearchResultsText(state), {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        reply_markup: { inline_keyboard: buildSearchResultsKeyboard(state) },
+      });
+    } catch {
+      // "message is not modified" などは無視
+    }
+  } catch (err) {
+    console.error('[telegram-bot] 選択トグルエラー:', err.message);
+    await bot.sendMessage(chatId, `❌ エラー: ${err.message}`);
+  }
+}
+
+async function handleRegDone(chatId, userId) {
+  const state = userStates.get(userId);
+  if (!state || state.step !== 'reg:select') return;
+
+  const selected = Array.from(state.selectedItems || []);
+  userStates.set(userId, {
+    ...state,
+    item_codes: selected,
+    step: 'add_price',
+  });
+
+  const confirmMsg = selected.length > 0
+    ? `✅ ${selected.length}件のSKUを選択しました\n\n最低価格を入力してください（例: 1500）`
+    : `⚠️ SKU未選択で進みます\n\n最低価格を入力してください（例: 1500）`;
+
+  await bot.sendMessage(chatId, confirmMsg, {
+    reply_markup: {
+      inline_keyboard: [[{ text: '⏭ スキップ（制限なし）', callback_data: 'skip_price' }]],
+    },
+  });
+}
+
+async function handleRegResearch(chatId, userId) {
+  const state = userStates.get(userId);
+  if (!state) return;
+  userStates.set(userId, {
+    ...state,
+    step: 'reg:search',
+    searchQuery: undefined,
+    searchResults: undefined,
+  });
+  await bot.sendMessage(chatId, '🔍 紐付ける商品名を入力してください（例: セノッピー）\n\n※ 既存の選択は保持されます', {
+    reply_markup: {
+      inline_keyboard: [[{ text: '⏭ スキップ（SKUなし）', callback_data: 'skip_sku' }]],
+    },
+  });
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -709,7 +890,8 @@ async function handleClearPrice(chatId, kwId, field) {
       return;
     }
     const label = field === 'min_price' ? '最低価格' : '上限価格';
-    await kw.update({ [field]: null });
+    const defaultValue = field === 'min_price' ? 0 : 999999;
+    await kw.update({ [field]: defaultValue });
     await replyWithKeyboard(chatId, `✅ 「${kw.keyword}」の${label}を削除しました（制限なし）`);
   } catch (err) {
     console.error('[telegram-bot] 価格削除エラー:', err.message);
@@ -1049,8 +1231,8 @@ async function handleAddMonitor(chatId, query, sku) {
       user_id: dbUserId,
       keyword: itemName,
       crossmall_item_code: sku,
-      min_price: null,
-      max_price: null,
+      min_price: 0,
+      max_price: 999999,
       platforms: JSON.stringify(['mercari', 'yahoo_flea']),
       is_active: true,
     });
