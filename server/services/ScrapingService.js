@@ -211,7 +211,7 @@ class ScrapingService {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const deleted = await Product.destroy({
         where: {
-          is_notified: true,
+          notified: true,
           created_at: { [Op.lt]: thirtyDaysAgo }
         }
       });
