@@ -76,6 +76,10 @@
 - Issue A'（未解決）: get_diff_stock / get_item の updated_at_fr に HH:MM:SS 付き datetime を渡すと、署名方式によらず「認証エラー」。raw/%20/+ いずれの署名でも同一エラー → CROSSMALL サーバー側バリデーション。YYYY-MM-DD（日付のみ）は認証OK だが TotalResult=0 で運用不可。真因は要 CROSSMALL 問合せ
 - Issue A''（未解決）: crossmall-stock-sync は 162件を1件ずつ get_stock（1秒間隔）で取得、約3分。get_diff_stock が使えれば30秒未満になる見込みだが Issue A' により未実現。代替高速化として待機を500ms→250msに短縮する余地あり
 - picofuri-backend restart タイミング: スキャン間隔 10分・実行時間 250秒 → 空白 3〜4分。「次回実行予定」ログで空白確認後に restart すれば数秒で完了しスキャン欠落なし
+- 2026-04-18: db:migrate:undo の連鎖リスク。Phase 1 のロールバックテストで products テーブル drop に至った。undo 前に DB バックアップ必須。複数回 undo は慎重に（マイグレーションファイルの down 定義を事前確認）
+- 2026-04-18: LINE 通知フラッドは is_notified バグと undo の複合で発生。緊急時は LINE_NOTIFY_ENABLED=false を .env に書いて `pm2 restart picofuri-backend --update-env` で即停止。products テーブル状態を起動時にヘルスチェックする仕組みを検討
+- 2026-04-18: Telegram 多段フローは userStates Map + step prefix（`reg:` 等）で既存フローとの衝突回避。Inline Keyboard のチェックボックスUI (☑/⬜) は callback_data を短く（64バイト制限）。n 変種抱き合わせは CrossmallItem.deriveBaseCode() で自動導出
+- 2026-04-18: Keywords.min_price/max_price は DB で NOT NULL（DEFAULT 0/999999）だが Sequelize モデルは allowNull 未指定。null を渡すと SQLITE_CONSTRAINT が SequelizeUniqueConstraintError にラップされ誤認を誘発。Keyword.create/update で価格未設定時は明示的に 0/999999 を渡すこと
 
 ## 既知の未解決課題
 1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
