@@ -72,13 +72,20 @@
 
 ---
 
-## 未完了・オーナー判断待ち項目
+## 未着手タスク（本タスク外）
 
-- 🔴 **Step 3d: picofuri-backend restart**（ScrapingService の CrossmallDbService 切り替えを本番反映）← **次のアクション**
-- 🟡 **Phase 7（JSON廃止）の実施判断**: `data/crossmall_sales_history.json` は現在も並行書き込み中。DB安定確認後に削除可
-- 🟡 **`2314-001247n` の在庫マスタ登録**: purchase_master_cacheに追加すれば次回sync時に自動反映
-- 🟡 **別issue: CROSSMALL バルクAPI 署名バグ修正**: `generateSigning()` に URL エンコード漏れあり。修正で `get_diff_stock` 差分同期が有効になりstock-sync が高速化
-- 🟡 **別issue: crossmall-items-sync 差分判定**: 現行は item_name 未取得ベース（新規SKU検知は動作する）
+| Issue | 内容 | 優先度 |
+|---|---|:---:|
+| Issue A | CROSSMALL 署名バグ修正（`generateSigning()` URLエンコード漏れ）→ `get_diff_stock` 差分同期が有効になりstock-sync 高速化 | 高 |
+| Issue B | `2314-001247n` の purchase_master_cache 登録 → 次回sync時に自動反映 | 低 |
+| Issue C | `crossmall-items-sync` 差分判定ロジック修正（現行: item_name未取得ベース） | 中 |
+| Phase 7 | `data/crossmall_sales_history.json` 廃止（DB安定確認後判断） | - |
+| 次フェーズ | 在庫アラートシステム実装 | - |
+| 次々フェーズ | Telegramキーワード登録フロー | - |
+| 別issue | 推奨仕入れ数の通知追加 | - |
+| 別issue | スラヘル通知の不具合調査 | - |
+
+`origin/feat/crossmall-db-integration` は 2026-04-25 以降に削除推奨（1週間のロールバック保険）。
 
 ---
 
@@ -112,3 +119,66 @@
 | 9 | crossmall-stock-sync | `*/30 * * * *` | stopped（正常） |
 | 4 | picofuri-backend | 常時 | online |
 | 5 | telegram-bot | 常時 | online |
+
+---
+
+## Step 3d 完了記録（2026-04-18）
+
+### Step 3d: picofuri-backend restart ✅
+- `pm2 restart picofuri-backend --update-env` 実施（スキャン空白時間を狙い実施）
+- 実施前: restarts=0, uptime=43h, pid=2480
+- 実施後: restarts=1, uptime=8m, pid=26944, status=online
+- 起動ログ確認:
+  - `✅ PurchaseMasterCache 復元完了: 162件` → `app.js` の `/api/cache/reload` EP から（正常）
+  - `✅ Database connection established` → Sequelize 接続正常
+  - `✅ スケジューラー起動完了 / 次回実行予定: 11:20:00`
+- ScrapingService: `CrossmallDbService` require 確認（Phase 6 コード反映済み）
+- ログ変化: `CROSSMALL情報（キャッシュ）` → `CROSSMALL情報（DB）` に切り替わりを確認
+
+---
+
+## Step 3e 完了記録（2026-04-18）
+
+### Step 3e: LINE通知実地確認 ✅
+
+**11:20 JST スキャンでの通知2件を突合**
+
+| 項目 | ワンデイ クレンズ | セノッピー |
+|---|---|---|
+| item_code | `2314-000519` | `2314-000521` |
+| キーワード | ワンデイ クレンズ | セノッピー |
+| フリマ商品名 | ＜新品＞GB グリーンブラザーズ ワンデイ クレンズファスティングベリー味 (¥5700) | 子供向けビタミン セノッピー 人気りんご味 (¥2580) |
+| stock: ログ vs DB | 0 vs **0** ✅ | 45 vs **45** ✅ |
+| sales28: ログ vs DB | 8 vs **8** ✅ | 28 vs **28** ✅ |
+| sales7: ログ vs DB | 1 vs **1** ✅ | 10 vs **10** ✅ |
+| lastSaleDate: ログ vs DB | 2026-04-13 vs **2026-04-13** ✅ | 2026-04-17 vs **2026-04-17** ✅ |
+| lastSalePrice: ログ vs DB | 6480 vs **6480** ✅ | 3300 vs **3300** ✅ |
+
+**不一致: 0件 / API直叩き残存: 0件**
+
+→ Phase 6 DB参照化が本番で正確に機能することを確認。
+
+---
+
+## 重要な教訓（追加）
+
+5. **CrossmallDbService の base_code 集約**: `deriveBaseCode()` で末尾 `n` を除去し、同一商品の複数 SKU を集約。`getStockAndPriceByBaseCode(baseCode)` で在庫・販売数を合算して返す。
+
+6. **通知経路 DB参照化完了**: picofuri-backend（ScrapingService）は CROSSMALL API を直叩きしない。在庫・価格情報は `crossmall_stock` / `crossmall_sales` テーブルから取得。
+
+7. **CROSSMALL 署名バグ**: `generateSigning()` はパラメータ値をそのまま連結してハッシュするが、axios 送信時は URLエンコードされるためサーバ側と不一致。`encodeURIComponent()` 適用で修正可能（Issue A）。
+
+8. **picofuri-backend restart のタイミング**: `*/10 * * * *` スケジュールのスキャン間隔（7分程度の空白）を狙えば、restart は数秒で完了しスキャン欠落なし。ログの「次回実行予定」時刻で空白時間を把握してから実施すること。
+
+---
+
+## フェーズ完了サマリー
+
+| フェーズ | 内容 | 状態 |
+|---|---|:---:|
+| Phase 1〜6 | CROSSMALL DB集約実装 | ✅ 完了（2026-04-17） |
+| Step 3a | crossmall-sync restart | ✅ 完了（2026-04-17） |
+| Step 3b | crossmall-items-sync PM2登録 | ✅ 完了（2026-04-17） |
+| Step 3c | crossmall-stock-sync PM2登録 + cron確認 | ✅ 完了（2026-04-17） |
+| Step 3d | picofuri-backend restart（Phase 6本番反映） | ✅ 完了（2026-04-18） |
+| Step 3e | LINE通知実地確認（全数値一致） | ✅ 完了（2026-04-18） |

@@ -32,7 +32,9 @@
 | プロセス | 種別 | 役割 |
 |---------|------|------|
 | picofuri-backend | 常時起動（500MB上限） | メインスクレイピング + API |
-| crossmall-sync | cron 0 */2 * * * | CROSSMALL同期 + 急減チェック + 2時間Telegram簡易レポート |
+| crossmall-sync | cron 0 */2 * * * | CROSSMALL受注同期（JSON+DB双方書き込み）+ 急減チェック + 2時間Telegram簡易レポート |
+| crossmall-items-sync | cron 30 3 * * * | 商品マスタ同期（新規SKU検知）|
+| crossmall-stock-sync | cron */30 * * * * | 在庫同期（162件フルスキャン、約3分） |
 | chrome-cleanup | cron */30 * * * * | Chrome/Tempクリーンアップ |
 | health-check | cron 0,30 * * * * | ヘルスチェック + LINE通知 |
 | db-cleanup | cron 0 3 * * * | DB 90日超レコード削除 |
@@ -68,6 +70,10 @@
 - フリマ推奨の即追加: callback_data 'add:{sku}' → handleAddMonitor() → Keyword.create() + editMessageReplyMarkup でボタン更新
 - InlineKeyboard callback_data は64バイト制限。'cat:xxx' / 'add:{sku}' 形式で十分短い
 - telegram-bot.cjs の node_modules は server/ 配下（プロジェクトルートからは見えない）
+- 通知経路（ScrapingService）は CrossmallDbService 経由の DB参照のみ。CROSSMALL API直叩きは同期スクリプト（crossmall-sync / crossmall-stock-sync / crossmall-items-sync）内でのみ使用
+- CrossmallDbService.deriveBaseCode() が末尾 `n` サフィックスを除去し base_code を導出。getStockAndPriceByBaseCode(baseCode) で同一商品の複数SKU在庫・販売数を集約して返す
+- CROSSMALL 署名生成バグ: generateSigning() はパラメータ値を rawのまま連結するが axios は URLエンコードして送信するためサーバ側と不一致になる。日付文字列（`/` 含む）を渡すと認証エラー。修正は encodeURIComponent() 適用（Issue A）
+- picofuri-backend restart タイミング: スキャン間隔 10分・実行時間 250秒 → 空白 3〜4分。「次回実行予定」ログで空白確認後に restart すれば数秒で完了しスキャン欠落なし
 
 ## 既知の未解決課題
 1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
