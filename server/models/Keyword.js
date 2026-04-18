@@ -83,6 +83,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       comment: 'CROSSMALL商品コード'
     },
+    item_codes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: '紐付けSKUコード（カンマ区切り複数可）'
+    },
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
