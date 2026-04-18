@@ -44,6 +44,10 @@ app.use('/api/sync', syncRouter);
 const settingsRouter = require('./routes/settings');
 app.use('/api/settings', settingsRouter);
 
+// CROSSMALL 内部検索 API
+const crossmallRouter = require('./routes/crossmall');
+app.use('/api/crossmall', crossmallRouter);
+
 // ★ 追加3: 起動時に Layer A 設定をDBへシード（Settings テーブルが存在する前提）
 const { seedLayerASettings } = require('./services/LayerAFilterService');
 seedLayerASettings().catch(err => console.warn('seedLayerASettings:', err.message));
