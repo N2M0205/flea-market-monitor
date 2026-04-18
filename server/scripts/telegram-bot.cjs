@@ -442,8 +442,8 @@ async function handleAddConfirm(chatId, userId) {
       keyword: state.keyword,
       crossmall_item_code: codes.length > 0 ? codes[0] : null,
       item_codes: codes.length > 0 ? codes.join(',') : null,
-      min_price: state.price != null ? state.price : null,
-      max_price: state.max_price != null ? state.max_price : null,
+      min_price: state.price != null ? state.price : 0,
+      max_price: state.max_price != null ? state.max_price : 999999,
       platforms: JSON.stringify(['mercari', 'yahoo_flea']),
       is_active: true
     });
@@ -890,7 +890,8 @@ async function handleClearPrice(chatId, kwId, field) {
       return;
     }
     const label = field === 'min_price' ? '最低価格' : '上限価格';
-    await kw.update({ [field]: null });
+    const defaultValue = field === 'min_price' ? 0 : 999999;
+    await kw.update({ [field]: defaultValue });
     await replyWithKeyboard(chatId, `✅ 「${kw.keyword}」の${label}を削除しました（制限なし）`);
   } catch (err) {
     console.error('[telegram-bot] 価格削除エラー:', err.message);
@@ -1230,8 +1231,8 @@ async function handleAddMonitor(chatId, query, sku) {
       user_id: dbUserId,
       keyword: itemName,
       crossmall_item_code: sku,
-      min_price: null,
-      max_price: null,
+      min_price: 0,
+      max_price: 999999,
       platforms: JSON.stringify(['mercari', 'yahoo_flea']),
       is_active: true,
     });
