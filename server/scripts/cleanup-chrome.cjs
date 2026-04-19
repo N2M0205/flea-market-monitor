@@ -240,8 +240,12 @@ function cleanupTemp() {
   console.log(`[temp-cleanup] 実行開始: ${new Date().toISOString()}`);
 
   // Tempフォルダの掃除対象を全サブフォルダに拡張
-  // process.env.TEMP は Temp\1 等を指すことがあるので、その親ディレクトリを基点にする
-  const baseTempDir = path.dirname(process.env.TEMP || os.tmpdir()); // C:\Users\...\AppData\Local\Temp
+  // process.env.TEMP は実行環境によって Temp\1 だったり Temp 直下だったりする。
+  // basename が数字ならその親（Temp 本体）、そうでなければ自身を基点にする。
+  const tempEnv = process.env.TEMP || os.tmpdir();
+  const baseTempDir = /^\d+$/.test(path.basename(tempEnv))
+    ? path.dirname(tempEnv)
+    : tempEnv;
   const tempDirs = [];
   // Temp直下
   tempDirs.push(baseTempDir);
