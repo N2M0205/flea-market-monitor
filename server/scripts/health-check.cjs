@@ -7,7 +7,7 @@
  *   - ディスク空き容量 (5GB / 2GB)
  *   - Tempフォルダサイズ (10GB / 20GB)
  *   - メモリ使用率 (92% / 97%)
- *   - Chrome プロセス数 (25個/35個)
+ *   - Chrome プロセス数 (50個/80個)
  *   - PM2 picofuri-backend の status (online以外)
  *   - picofuri-backend 再起動回数 (30分間で5回以上)
  *   - スクレイピング成功率 (Mercari 50%/25%, Yahoo 80%, 処理時間600秒)
@@ -198,10 +198,10 @@ function checkChromeProcesses() {
     const lines = raw.split('\n').filter(l => l.trim().length > 0);
     const count = lines.length;
 
-    if (count > 70) {
-      return { ok: false, level: 'critical', count, message: `🚨 Chromeプロセス数: ${count}個（70個超 - 緊急）` };
+    if (count > 80) {
+      return { ok: false, level: 'critical', count, message: `🚨 Chromeプロセス数: ${count}個（80個超 - 緊急）` };
     }
-    if (count > 55) {
+    if (count > 50) {
       return { ok: false, level: 'warning', count, message: `⚠️ Chromeプロセス数: ${count}個（異常蓄積の兆候）` };
     }
     return { ok: true, count, message: `✅ Chromeプロセス数: ${count}個` };
