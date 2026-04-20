@@ -1,5 +1,6 @@
 node_modules/
 .env
+.env.backup*
 *.sqlite
 *.sqlite3
 logs/
@@ -10,3 +11,18 @@ Thumbs.db
 # 在庫アラート実行時データ（ランタイム生成・コミット不要）
 data/inventory_alert_state.json
 data/inventory_alert_history.json
+
+# CROSSMALL/購買マスタ ランタイムキャッシュ（個人データ・サイズ肥大）
+data/crossmall_sales_history.json
+data/purchase_master_cache.json
+data/health_check_state.json
+
+# デバッグ用スクリーンショット
+server/debug-*.png
+
+# 一時調査ファイル
+tmp_*
+*.gdoc
+
+# Claude Code ローカルキャッシュ
+.claude/scheduled_tasks.lock

@@ -1,0 +1,344 @@
+# ピコフリ Telegram キーワード登録 FSM 実装指示書
+
+> 作成日: 2026-04-18  
+> 対象: Claude Code（VPS実行環境）  
+> ブランチ: `feat/telegram-keyword-registration`  
+> 実行モード: **フェーズ単位で承認型（各Phase完了時に報告・次Phase承認待ち）**
+
+-----
+
+## 0. 実行ルール
+
+### 0.1 進行方針
+
+**6フェーズに分割。各Phase完了ごとに報告 → オーナー承認 → 次Phaseへ**。  
+自律連続実行はしない。各Phaseが独立して動作確認できる設計。
+
+### 0.2 停止条件（オーナー承認必要）
+
+- ❌ master への直接コミット・マージ
+- ❌ 本番 PM2 プロセスの登録・削除・restart
+- ❌ `.env` の変更
+- ❌ 既存DBテーブルの既存カラム変更（追加のみOK）
+- ❌ セルフテスト2回リトライ失敗
+- ❌ 設計外の変更（範囲拡大）
+
+### 0.3 自由に進められる
+
+- ✅ `feat/telegram-keyword-registration` ブランチへのコミット・push
+- ✅ 新規ファイル作成
+- ✅ マイグレーション実行・ロールバック
+- ✅ ローカルスクリプト手動実行
+- ✅ テスト用プロセス（`-test` サフィックス）の操作
+
+### 0.4 コミット粒度
+
+各Phase完了（セルフテスト全PASS後）ごとに1コミット。Push後、オーナー報告。
+
+### 0.5 セッションログ
+
+`PICOFURI-SESSION-LOG-2026-04-18.md` に各Phase完了時に追記。
+
+-----
+
+## 1. 背景と目的
+
+### 現状の問題
+
+- キーワード登録・編集は Web UI (`/keywords` 画面) のみ。デスク前でないと使えない
+- 1キーワード = 1 item_code の単一紐付け → `n` サフィックス複数カタログが集計漏れ
+- セノッピー系で「CSV実績と通知数字の不整合」の根本原因
+
+### ゴール
+
+- Telegram で新規キーワード登録が完結する（モバイル完結）
+- 1キーワードに複数 item_codes を紐付け可能にする
+- 既存キーワードも新体系に移行、`n` 変種の自動抱き合わせを効かせる
+
+### 対象外（別タスク化）
+
+- `/edit` / `/delete` / `/search` / `/scan` コマンド（第二弾）
+- 除外キーワード・上限価格の UI（既存 Web UI で運用継続）
+- プラットフォーム選択 UI（デフォルト「メルカリ+Yahoo!フリマ」で固定）
+
+-----
+
+## 2. 設計
+
+### 2.1 DB変更（Phase 1）
+
+`keywords` テーブルに `item_codes` カラム追加（TEXT、カンマ区切り）。既存 `item_code` カラムは **残す**（後方互換、Phase 2 で移行後も当面保持）。
+
+```sql
+ALTER TABLE keywords ADD COLUMN item_codes TEXT;
+CREATE INDEX idx_keywords_item_codes ON keywords(item_codes);
+```
+
+### 2.2 既存キーワード移行（Phase 2）
+
+|状態                                         |移行方針                                              |
+|-------------------------------------------|--------------------------------------------------|
+|`item_code` が NULL                         |`item_codes` も NULL                               |
+|`item_code` が単一値（例: `2314-001811`）         |`item_codes = '2314-001811'`                      |
+|`item_code` 側に `n` 変種が crossmall_items にあれば|`item_codes = '2314-001811,2314-001811n'`（自動抱き合わせ）|
+
+移行スクリプトは冪等（再実行しても同じ結果）。
+
+### 2.3 検索API（Phase 3）
+
+```
+GET /api/crossmall/items/search?q=<キーワード>&limit=50
+```
+
+レスポンス:
+
+```json
+{
+  "count": 3,
+  "items": [
+    {
+      "item_code": "2314-001247",
+      "item_name": "セノッピー チュアブル SENOPPY CHEWABLE 30日分 30包",
+      "base_code": "2314-001247",
+      "stock": 0,
+      "has_n_variant": true,
+      "n_variant_item_code": "2314-001247n"
+    },
+    ...
+  ]
+}
+```
+
+実装：`crossmall_items` を `item_name LIKE '%<q>%'` で部分一致検索。`has_n_variant` は同じ `base_code` で末尾 `n` の item_code が存在するか。
+
+### 2.4 Telegram FSM コア（Phase 4）
+
+#### 状態遷移
+
+```
+IDLE
+  ↓ /add
+ASK_KEYWORD
+  ↓ (テキスト入力)
+ASK_SEARCH_QUERY
+  ↓ (テキスト入力)
+SELECT_ITEMS
+  ↓ (チェックボックス操作 → 完了ボタン)
+CONFIRM
+  ↓ (登録 / やり直し / キャンセル)
+DONE (または IDLE に戻る)
+```
+
+#### セッション管理
+
+メモリ内 `Map<userId, { step, data, createdAt }>`。10分でタイムアウト自動破棄。
+
+#### 権限チェック
+
+`process.env.TELEGRAM_ADMIN_ID` と一致するユーザーのみ。不一致は無視（既存 Bot と同じ方式）。
+
+#### Inline Keyboard 制約
+
+Telegram 仕様: 1メッセージ最大100ボタン、推奨 1行5ボタン以下。  
+今回は 1行1商品 + 完了/キャンセルの2ボタン。50件超の検索結果はページネーション不要（件数多いなら再検索を促す）。
+
+### 2.5 管理コマンド（Phase 5）
+
+|コマンド     |動作                                 |
+|---------|-----------------------------------|
+|`/list`  |登録済みキーワード一覧表示（ID、name、紐付けSKU数、監視状態）|
+|`/cancel`|進行中のセッションをリセット                     |
+|`/help`  |コマンド一覧                             |
+
+### 2.6 ScrapingService 連携（Phase 6）
+
+現行 `ScrapingService.getStockAndPrice(item_code)` 単一呼び出しを、`item_codes`（配列）受け取りに変更。内部で `CrossmallDbService.getStockAndPriceByBaseCode()` を活用。
+
+通知文生成も複数 item_codes を意識する必要があるか調査。base_code集約で十分なら呼び出し側の変更のみ。
+
+-----
+
+## 3. 実装フェーズ
+
+### Phase 1: DBマイグレーション
+
+**タスク:**
+
+1. `server/migrations/20260418000001-add-item-codes-to-keywords.js` 作成
+- `item_codes` TEXT カラム追加
+- インデックス作成
+1. `server/models/Keyword.js` に `item_codes` フィールド追加
+1. `npx sequelize-cli db:migrate` 実行
+
+**セルフテスト:**
+
+- [ ] `sqlite3 database.sqlite ".schema keywords"` で `item_codes` カラムが追加されている
+- [ ] 既存テーブル他カラムは変更なし
+- [ ] ロールバック: `db:migrate:undo` でカラム消失確認 → `db:migrate` で再作成
+- [ ] `Keyword.findAll()` で `item_codes` プロパティが含まれる（NULL許容）
+
+-----
+
+### Phase 2: 既存キーワード移行
+
+**タスク:**
+
+1. `server/scripts/migrate-keywords-to-item-codes.cjs` 作成
+1. 処理内容:
+- 全 keywords 取得
+- 各キーワードの `item_code` を読む
+- `crossmall_items` で `base_code` が一致する全 item_code（`n` 変種含む）を取得
+- カンマ区切りで `item_codes` カラムに書き込み
+- 冪等性（再実行で同じ結果）
+- 処理件数とサマリ出力
+1. 実行: `node server/scripts/migrate-keywords-to-item-codes.cjs`
+
+**セルフテスト:**
+
+- [ ] 移行前後のキーワード件数が一致
+- [ ] `item_code` が設定されているキーワードすべてで `item_codes` が NULL でない
+- [ ] `item_code = '2314-001811'` のキーワードの `item_codes` に `2314-001811` が含まれる（`n`変種があれば併記）
+- [ ] `item_code` が NULL だったキーワードは `item_codes` も NULL（変更なし）
+- [ ] 再実行で結果変化なし（冪等性）
+- [ ] 具体例として「りそうのコーヒー」または「ToyLaBO」などで結果を抜粋報告
+
+-----
+
+### Phase 3: 検索API
+
+**タスク:**
+
+1. `server/routes/crossmall.js` 作成（既存になければ）
+1. エンドポイント実装: `GET /api/crossmall/items/search`
+- クエリ `q` で部分一致検索（必須、空なら400）
+- クエリ `limit`（省略時50、最大100）
+- レスポンスは §2.3 の形式
+1. `server/app.js` にルート登録: `app.use('/api/crossmall', require('./routes/crossmall'));`
+1. 動作確認: `curl http://localhost:3000/api/crossmall/items/search?q=セノッピー`
+
+**セルフテスト:**
+
+- [ ] `q=セノッピー` で複数件ヒット
+- [ ] `q=XYZ`（存在しない） で `count=0, items=[]`
+- [ ] `q=` (空) で 400 エラー
+- [ ] `limit=5` で最大5件に制限される
+- [ ] `has_n_variant` が `2314-001247` で true、`2314-001636` で false
+- [ ] `n_variant_item_code` が `has_n_variant=true` の時のみ存在
+
+-----
+
+### Phase 4: Telegram FSM コア（/add フロー）
+
+**タスク:**
+
+1. 既存 `telegram-bot` プロセスのメインファイル（推測: `server/scripts/telegram-bot.cjs` or 類似）に実装追加
+1. セッション管理（メモリ Map）実装
+1. `/add` コマンドハンドラ + ステート遷移ロジック実装
+1. Inline Keyboard 生成・コールバック処理
+1. `/cancel` で途中キャンセル対応
+1. 検索APIを内部呼び出し（localhost:3000 経由 or 直接 Model 参照、軽量な方を選択）
+1. 登録成功時に `keywords` テーブルに INSERT
+1. 権限チェック（`TELEGRAM_ADMIN_ID`）
+
+**セルフテスト:**
+
+- [ ] `/add` で会話開始、ステップ1/4 の質問が表示される
+- [ ] キーワード入力でステップ2/4 に遷移
+- [ ] 商品検索で結果が Inline Keyboard で表示される
+- [ ] チェックボックスタップで選択状態が変化（メッセージ編集）
+- [ ] `n` 変種のある商品を選択すると自動抱き合わせ表示
+- [ ] 完了ボタンで確認画面に遷移
+- [ ] 登録ボタンで DB 書き込み成功（`keywords` テーブルに新レコード）
+- [ ] 登録完了後、キーワードID を含む完了メッセージ表示
+- [ ] `/cancel` でセッション破棄、IDLE に戻る
+- [ ] 10分放置でセッション自動破棄（タイマーテストは単体テストで）
+- [ ] 非管理者ユーザーが `/add` を打ってもレスポンスしない
+- [ ] 重複キーワード名で警告表示（続行/キャンセル選択可）
+
+**本番PM2反映はこの段階では不要**（テストは手動実行で）。管理ユーザーがTelegramで実動作確認する段階で pm2 restart telegram-bot を指示待ち。
+
+-----
+
+### Phase 5: 管理コマンド
+
+**タスク:**
+
+1. `/list` 実装
+- 全 keywords 取得
+- フォーマット: `[ID] キーワード名 / SKU数 / 監視状態`
+- 件数多い時は20件ずつ分割送信
+1. `/help` 実装
+- 現在サポート中のコマンド一覧を固定テキストで表示
+1. `/cancel` は Phase 4 で実装済み
+
+**セルフテスト:**
+
+- [ ] `/list` で全キーワードが表示される
+- [ ] キーワード20件でもメッセージが途切れずに表示される
+- [ ] `/help` でコマンド一覧が表示される
+- [ ] 非管理者ユーザーには `/list`, `/help` とも無反応
+
+-----
+
+### Phase 6: ScrapingService 側の複数 item_codes 対応
+
+**タスク:**
+
+1. 現行 `ScrapingService.js` で `keyword.item_code`（単数）を参照している箇所を特定
+1. 以下の方針で変更:
+- 新 `keyword.item_codes`（カンマ区切り）があればそれを優先
+- なければ後方互換で `keyword.item_code` を使う
+1. `item_codes` から `base_code` を抽出（1個目の item_code から `deriveBaseCode()`）
+1. `CrossmallDbService.getStockAndPriceByBaseCode(baseCode)` を呼ぶ
+1. 通知文に影響する変更点を確認・調整
+
+**セルフテスト:**
+
+- [ ] `item_codes` が複数のキーワードで集約された在庫・販売数が取れる
+- [ ] `item_codes` が単数のキーワードでも正常動作
+- [ ] `item_codes` NULL で `item_code` のみのキーワードも正常動作（後方互換）
+- [ ] 通知文の数字が Phase 6 修正前と一致（単一item_codeのキーワードの場合）
+- [ ] セノッピー系（`n`変種あり）で集約後の数字が CSV と整合
+- [ ] エラーログなし
+
+**本番PM2反映**: このPhase完了後、master merge → picofuri-backend restart を指示待ち。
+
+-----
+
+## 4. 完了条件
+
+- [ ] 6フェーズすべて完了・push 済み
+- [ ] master merge 完了（オーナー承認後）
+- [ ] Telegram で新規キーワード登録が動作する（実地確認）
+- [ ] 既存20キーワードが `item_codes` ベースで動作する
+- [ ] 通知文でセノッピー系の集約効果が確認できる
+
+-----
+
+## 5. 参考情報
+
+### プロジェクト構成
+
+- リポジトリ: `N2M0205/flea-market-monitor`
+- VPS: ConoHa Windows VPS (160.251.227.206)
+- Node.js v22.14.0 / PM2 / SQLite
+- Telegram Bot: `@picofuri_admin_bot`、polling モード
+- `TELEGRAM_ADMIN_ID`: `8656466812`
+
+### 既存テーブル参照
+
+- `keywords`: name, platforms, item_code, exclude_keywords, global_exclude_enabled 他
+- `crossmall_items`: item_code, item_name, base_code, unit_price 他（Phase 1-6で整備済み）
+- `crossmall_stock`: item_code, stock_count 他
+- `crossmall_sales`: order_number, item_code, order_date, amount 他
+
+### 既知の落とし穴
+
+- PowerShellの `Out-File` は BOM付与 → `node -e "fs.writeFileSync()"` 使う
+- `NODE_ENV=production` 禁止
+- PM2環境変数変更時は `--update-env` フラグ必須
+- Telegram polling モードは HTTPS 不要、再起動で polling 再開
+
+-----
+
+*本ドキュメントに従って、Phase 1 から順次実装してください。各Phase完了ごとに報告して承認を待ってください。*

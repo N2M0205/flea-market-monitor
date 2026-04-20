@@ -48,7 +48,10 @@
       "Bash(taskkill //PID 36884 //F)",
       "Bash(taskkill //PID 13940 //F)",
       "Bash(curl:*)",
-      "Bash(for p:*)"
+      "Bash(for p:*)",
+      "Bash(wmic process *)",
+      "Bash(pm2 jlist *)",
+      "Bash(powershell *)"
     ]
   }
 }
