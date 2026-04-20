@@ -177,11 +177,11 @@ function checkMemory() {
     const freeKB = parseInt(freeMatch[1], 10);
     const usagePct = ((totalKB - freeKB) / totalKB) * 100;
 
-    if (usagePct > 92) {
-      return { ok: false, level: 'critical', usagePct, message: `🚨 メモリ使用率 ${usagePct.toFixed(1)}%（92%超 - 緊急）` };
+    if (usagePct > 97) {
+      return { ok: false, level: 'critical', usagePct, message: `🚨 メモリ使用率 ${usagePct.toFixed(1)}%（97%超 - 緊急）` };
     }
-    if (usagePct > 85) {
-      return { ok: false, level: 'warning', usagePct, message: `⚠️ メモリ使用率 ${usagePct.toFixed(1)}%（85%超）` };
+    if (usagePct > 92) {
+      return { ok: false, level: 'warning', usagePct, message: `⚠️ メモリ使用率 ${usagePct.toFixed(1)}%（92%超）` };
     }
     return { ok: true, usagePct, message: `✅ メモリ使用率 ${usagePct.toFixed(1)}%` };
   } catch (err) {
