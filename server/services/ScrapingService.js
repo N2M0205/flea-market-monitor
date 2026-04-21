@@ -356,6 +356,13 @@ class ScrapingService {
       : products;
 
     // ③ DB保存（新規のみ）
+    // スキャン中にキーワードが削除された場合（レースコンディション）は早期リターン
+    const keywordStillExists = await Keyword.findByPk(keyword.id, { attributes: ['id'] });
+    if (!keywordStillExists) {
+      console.warn(`  ⚠️ キーワード削除済みのためDB保存スキップ: "${keyword.keyword}"`);
+      return;
+    }
+
     const newProducts = [];
     for (const item of filteredProducts) {
       const [saved, created] = await Product.findOrCreate({

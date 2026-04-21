@@ -13,7 +13,9 @@ module.exports = (sequelize) => {
       references: {
         model: 'Keywords',
         key: 'id'
-      }
+      },
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE',
     },
     platform: {
       type: DataTypes.ENUM('mercari', 'yahoo_flea', 'rakuma', 'yahoo_auction'),
