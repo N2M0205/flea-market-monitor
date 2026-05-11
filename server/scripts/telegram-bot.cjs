@@ -508,7 +508,12 @@ async function handleRegSearchQuery(chatId, userId, text, state) {
 
   try {
     const results = await CrossmallItem.findAll({
-      where: { item_name: { [Op.like]: `%${query}%` } },
+      where: {
+        [Op.or]: [
+          { item_name: { [Op.like]: `%${query}%` } },
+          { item_code: { [Op.like]: `%${query}%` } },
+        ],
+      },
       limit: REG_SEARCH_LIMIT + 1,
       order: [['item_code', 'ASC']],
     });
