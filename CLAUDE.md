@@ -80,6 +80,10 @@
 - 2026-04-18: LINE 通知フラッドは is_notified バグと undo の複合で発生。緊急時は LINE_NOTIFY_ENABLED=false を .env に書いて `pm2 restart picofuri-backend --update-env` で即停止。products テーブル状態を起動時にヘルスチェックする仕組みを検討
 - 2026-04-18: Telegram 多段フローは userStates Map + step prefix（`reg:` 等）で既存フローとの衝突回避。Inline Keyboard のチェックボックスUI (☑/⬜) は callback_data を短く（64バイト制限）。n 変種抱き合わせは CrossmallItem.deriveBaseCode() で自動導出
 - 2026-04-18: Keywords.min_price/max_price は DB で NOT NULL（DEFAULT 0/999999）だが Sequelize モデルは allowNull 未指定。null を渡すと SQLITE_CONSTRAINT が SequelizeUniqueConstraintError にラップされ誤認を誘発。Keyword.create/update で価格未設定時は明示的に 0/999999 を渡すこと
+- 2026-05-11: Telegram Bot の商品検索（handleRegSearchQuery）は item_name のみだった → item_code も OR 条件に追加済み（c7fd635）。SKUを直打ちしても検索可能
+- 2026-05-11: purchase_master_cache はGAS廃止(2026-04-15)以降に新規登録されたSKUを自動追加しない設計だった。updateLastSalePrices() は既存itemのみ更新しnotFoundを捨てるため、初販売日が2026-04-16以降の商品が永久に漏れ続けるバグ。addMissingSkusFromSalesHistory() を sync-crossmall-prices.cjs に追加して根本修正済み（b4025bb）。2314-系かつ salesHistory に販売実績あり・cache未登録のSKUを syncStock() 前に自動追加する
+- 2026-05-11: crossmall_items DB（Telegramの商品検索対象）は purchase_master_cache をソースとして crossmall-items-sync（毎朝3:30）が更新する。cache に追加されても DB反映は翌朝まで待つか sync-crossmall-items.cjs を手動実行すること
+- 2026-05-11: crossmall-stock-sync の対象件数は crossmall_items DB の件数に連動（294件→約5分に増加）。PM2プロセス表のコメント「162件」は古い
 
 ## 既知の未解決課題
 1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
