@@ -72,6 +72,9 @@ const PRUNE_DAYS = 90;          // これより古い販売レコードを削除
 const FETCH_DELAY_MS = 1000;    // 1回の取得ごとに1秒待機
 const SAVE_INTERVAL = 50;       // N件ごとに中間保存（クラッシュ復旧用）
 
+// main()からaddMissingSkusFromSalesHistory()へpriceMapを受け渡すための一時変数
+let _lastPriceMap = null;
+
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
@@ -254,6 +257,7 @@ async function main() {
   // 蓄積データから統計を算出してマスタに反映
   const priceMap = salesHistory.computeStats();
   console.log(`\n統計算出完了: ${priceMap.size}種類のSKU`);
+  _lastPriceMap = priceMap;
 
   if (priceMap.size > 0) {
     const result = purchaseMasterCache.updateLastSalePrices(priceMap);
@@ -409,6 +413,77 @@ async function addMissingSkusFromKeywords(crossmall) {
     console.error('⚠️ 新規SKUチェックでエラー（既存SKU更新には影響なし）:', err.message);
   } finally {
     try { await db.sequelize.close(); } catch (_) {}
+  }
+}
+
+/**
+ * salesHistoryに販売実績があるがcache未登録の2314-系SKUを自動追加
+ * - GAS廃止(2026-04-15)以降に登録された新商品がcacheに乗らない問題への根本対応
+ * - 2314-系のみ対象（global-/import-/yport-等の他カタログは対象外）
+ * - syncStock()の前に呼ぶことで、追加直後から在庫同期が有効になる
+ * @param {CrossmallService} crossmall
+ * @param {Map} priceMap - salesHistory.computeStats()の結果
+ */
+async function addMissingSkusFromSalesHistory(crossmall, priceMap) {
+  if (!priceMap || priceMap.size === 0) {
+    console.log('📋 salesHistory新規SKUチェック: priceMapなし（スキップ）');
+    return;
+  }
+
+  const cachedSkus = new Set(
+    Object.values(purchaseMasterCache._cache.items)
+      .map(i => String(i.sku || i.crossmall_item_code || '').trim())
+      .filter(Boolean)
+  );
+
+  const missing = [...priceMap.keys()].filter(sku =>
+    sku.startsWith('2314-') && !cachedSkus.has(sku)
+  );
+
+  if (missing.length === 0) {
+    console.log(`📋 salesHistory新規SKUチェック: 未登録なし（2314-系 全件キャッシュ済み）`);
+    return;
+  }
+
+  console.log(`\n🆕 salesHistory新規SKU追加開始: ${missing.length}件`);
+  let added = 0;
+  let addErrors = 0;
+
+  for (const sku of missing) {
+    try {
+      const [itemInfo, stockInfo] = await Promise.all([
+        crossmall.getItemInfo(sku).catch(() => null),
+        crossmall.getStockInfo(sku).catch(() => null),
+      ]);
+
+      const stats = priceMap.get(sku);
+      const nextIndex = Object.keys(purchaseMasterCache._cache.items).length;
+      purchaseMasterCache._cache.items[nextIndex] = {
+        sku,
+        purchaseLimit: 0,
+        stock:         stockInfo?.stock ?? 0,
+        sales28:       stats.sales28,
+        lastSalePrice: stats.price,
+        deliveryType:  stats.deliveryType || '',
+        sales7:        stats.sales7,
+        lastSaleDate:  stats.lastSaleDate,
+        item_name:     itemInfo?.item_name || '(名称不明)',
+      };
+      purchaseMasterCache._cache.totalItems = nextIndex + 1;
+
+      console.log(`  🆕 ${sku} (${itemInfo?.item_name || '?'}) 在庫:${stockInfo?.stock ?? '?'} sales28:${stats.sales28}`);
+      added++;
+    } catch (err) {
+      console.error(`  ❌ salesHistory新規SKU追加失敗: ${sku} ${err.message}`);
+      addErrors++;
+    }
+
+    await sleep(FETCH_DELAY_MS);
+  }
+
+  if (added > 0) {
+    purchaseMasterCache._saveToDisk();
+    console.log(`✅ salesHistory新規SKU追加完了: ${added}件追加, ${addErrors}件エラー`);
   }
 }
 
@@ -608,6 +683,7 @@ async function runInventoryAlertCheck() {
 main()
   .then(async () => {
     const crossmall = new CrossmallService();
+    await addMissingSkusFromSalesHistory(crossmall, _lastPriceMap);
     await syncStock(crossmall);
     await runInventoryAlertCheck();   // Phase 2: syncStock後に急減・2時間チェック
     await syncItemNames(crossmall);
