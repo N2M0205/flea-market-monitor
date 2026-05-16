@@ -142,6 +142,13 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       // ── ページ遷移（高速） ────────────────────────────────────
       await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
+      // ── エラーページ早期検知（10秒タイムアウト無駄待機を排除） ──
+      const bodyText = await page.$eval('body', el => el.innerText).catch(() => '');
+      if (bodyText.includes('エラーが発生しました') || bodyText.includes('時間をおいて再度お試しください')) {
+        console.warn(`⚠️ Mercariエラーページ検知: "${keyword}" → スキップ`);
+        return [];
+      }
+
       // ── 商品要素の出現を待つ（SPAの描画完了を待機） ──────────
       try {
         await page.waitForSelector('[data-testid="item-cell"]', { timeout: 10000 });
