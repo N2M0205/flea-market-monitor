@@ -353,6 +353,25 @@ class YahooFleaScraper {
         }
       }
 
+      // ── 検索結果件数取得 ────────────────────────────────────
+      let totalListingCount = null;
+      try {
+        totalListingCount = await page.evaluate(() => {
+          const allEls = Array.from(document.querySelectorAll('span, p, div, h2, h3'));
+          for (const el of allEls) {
+            const text = (el.textContent || '').trim();
+            const m = text.match(/^([\d,]+)\s*件/);
+            if (m && el.children.length <= 2) {
+              return parseInt(m[1].replace(/,/g, ''), 10);
+            }
+          }
+          return null;
+        });
+        if (totalListingCount !== null) {
+          console.log(`[件数取得] Yahoo!フリマ "${keyword}": ${totalListingCount}件`);
+        }
+      } catch (_) {}
+
       // ── データ整形 ───────────────────────────────
       const formatted = products.slice(0, limit).map(p => ({
         product_id:   String(p.product_id).trim(),
@@ -370,6 +389,7 @@ class YahooFleaScraper {
       console.log(`✅ Yahoo!フリマ: ${formatted.length}件整形完了`);
       // 成功したら連続エラーカウンタをリセット
       this.consecutiveAbortCount = 0;
+      formatted.totalListingCount = totalListingCount;
       return formatted;
 
     } catch (error) {

@@ -33,6 +33,33 @@ function calcProfit(lastSalePrice, shippingCost, fleaMarketPrice) {
   return Math.round(lastSalePrice * 0.9 - shippingCost - fleaMarketPrice);
 }
 
+// ─────────────────────────────────────────────
+// STEP 3: 計算・判定ロジック
+// ─────────────────────────────────────────────
+
+function calcStockDays(stock, sales28) {
+  if (stock === 0) return 0;
+  if (!sales28 || sales28 === 0) return Infinity;
+  return Math.round(stock / (sales28 / 28));
+}
+
+function calcRarity(totalListingCount) {
+  const count = totalListingCount || 0;
+  if (count <= 2) return { label: '🔥 レア', count };
+  if (count <= 7) return { label: '普通',    count };
+  return             { label: '多い',        count };
+}
+
+function calcJudgement(profitRate, sales7, stockDays, rarityLabel) {
+  const isRare = rarityLabel === '🔥 レア';
+  if (profitRate < 12) return '❌ スルー';
+  if (stockDays !== Infinity && stockDays > 60) return '❌ スルー';
+  if (profitRate >= 20 && sales7 >= 3 && (stockDays <= 14 || isRare)) {
+    return '✅ 即買い';
+  }
+  return '🤔 検討';
+}
+
 class LineNotificationService {
   constructor() {
     this.config = {
@@ -114,7 +141,22 @@ class LineNotificationService {
       return false;
     }
 
-    const text = this.buildPurchaseAlertText(params);
+    // GoogleSheetsから仕入れ中データを取得
+    let purchasingCount = 0;
+    let purchaseHistory = 0;
+    try {
+      const { getPurchaseData } = require('./GoogleSheetsService.cjs');
+      const itemCode = params.keyword?.crossmall_item_code || params.keyword?.sku_code || '';
+      if (itemCode) {
+        const gsData = await getPurchaseData(itemCode);
+        purchasingCount = gsData.purchasingCount;
+        purchaseHistory = gsData.purchaseHistory;
+      }
+    } catch (gsErr) {
+      console.error('[GoogleSheets] 仕入れ中データ取得エラー（通知は続行）:', gsErr.message);
+    }
+
+    const text = this.buildPurchaseAlertText({ ...params, purchasingCount, purchaseHistory });
 
     try {
       const client = await this.getClient();
@@ -133,29 +175,26 @@ class LineNotificationService {
     }
   }
 
-  // ② 通知テキスト組み立て
+  // ② 通知テキスト組み立て（新フォーマット）
   buildPurchaseAlertText(params) {
-    const { product, master, crossmallInfo, hoursOld } = params;
+    const { product, master, crossmallInfo, totalListingCount, purchasingCount, purchaseHistory } = params;
 
     const price         = Number(product?.price) || 0;
     const stock         = crossmallInfo?.stock  != null ? crossmallInfo.stock : (master?.stock ?? null);
-    // sales28: CROSSMALL APIが0を返す場合はマスターキャッシュにフォールバック
     const sales28       = (crossmallInfo?.sales28 != null && crossmallInfo.sales28 > 0)
       ? crossmallInfo.sales28
       : (master?.sales28 ?? crossmallInfo?.sales28 ?? null);
-    const sales7        = master?.sales7 ?? null;
-    const lastSaleDate  = master?.lastSaleDate ?? null;
+    const sales7        = crossmallInfo?.sales7 ?? master?.sales7 ?? null;
+    const lastSaleDate  = crossmallInfo?.lastSaleDate ?? master?.lastSaleDate ?? null;
     const lastSalePrice = crossmallInfo?.price  != null ? Number(crossmallInfo.price)
                         : master?.lastSalePrice != null ? Number(master.lastSalePrice)
                         : null;
 
-    // 最終販売日の表示フォーマット (YYYY-MM-DD → M/D)
     const lastSaleDateDisp = lastSaleDate ? lastSaleDate.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1/$2') : '─';
 
-    // 送料・利益見込み計算
     const deliveryType  = crossmallInfo?.deliveryType || master?.deliveryType || '';
     const shippingCost  = getShippingCost(deliveryType);
-    // 上限仕入: 3000円以下は300円固定利益、3000円超は利益率12%確保
+
     let purchaseLimit = null;
     if (lastSalePrice != null) {
       if (lastSalePrice <= 3000) {
@@ -165,27 +204,52 @@ class LineNotificationService {
       }
     }
 
+    // 在庫日数・レア度・判定
+    const stockDays = calcStockDays(stock ?? 0, sales28 ?? 0);
+    const stockDaysDisp = stockDays === Infinity ? '∞' : String(stockDays);
+
+    const rarityObj = totalListingCount !== null
+      ? calcRarity(totalListingCount)
+      : null;
+    const rarityDisp = rarityObj
+      ? `${rarityObj.label}（${rarityObj.count}件）`
+      : '取得失敗';
+
+    let judgement = '';
+    let profitRate = 0;
+    if (lastSalePrice != null && price > 0) {
+      const profit = calcProfit(lastSalePrice, shippingCost, price);
+      profitRate = (profit / lastSalePrice) * 100;
+      judgement = calcJudgement(profitRate, sales7 ?? 0, stockDays, rarityObj?.label ?? '');
+    }
+
     let profitLine = '';
     if (lastSalePrice != null && price > 0) {
       const profit = calcProfit(lastSalePrice, shippingCost, price);
-      const profitRate = ((profit / lastSalePrice) * 100).toFixed(1);
+      const pr = profitRate.toFixed(1);
       const emoji = profit >= 0 ? '✅' : '⚠️';
       const sign = profit >= 0 ? '+' : '';
-      profitLine = `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}（送料¥${shippingCost}）利益率${profitRate}%`;
+      profitLine = `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}（送料¥${shippingCost}）利益率${pr}%`;
     }
 
     const lines = [
+      judgement || '🤔 検討',
+      '',
       `🛒 ${product?.title || '─'}`,
       `¥${price.toLocaleString()}`,
       `🔗 ${product?.url || '─'}`,
       '',
       `📦 在庫${stock != null ? stock : '─'}個 | 28日${sales28 != null ? sales28 : '─'}個 | 7日${sales7 != null ? sales7 : '─'}個 | 最終${lastSaleDateDisp}`,
+      `📅 仕入中:${purchasingCount ?? 0}個 | 在庫日数: 約${stockDaysDisp}日`,
+      `🔥 出品レア度: ${rarityDisp}`,
       `💰 直近販売¥${lastSalePrice != null ? lastSalePrice.toLocaleString() : '─'} | 上限仕入¥${purchaseLimit != null ? Math.round(purchaseLimit).toLocaleString() : '─'}`,
     ];
 
     if (profitLine) {
       lines.push(profitLine);
     }
+
+    lines.push(`📋 仕入れ実績: 過去${purchaseHistory ?? 0}回`);
 
     return lines.join('\n');
   }

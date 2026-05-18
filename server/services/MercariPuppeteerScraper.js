@@ -189,6 +189,30 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       }
       console.log('✅ CAPTCHA検知なし');
 
+      // ── 検索結果件数取得（全パターン共通）──────────────────────
+      let totalListingCount = null;
+      try {
+        totalListingCount = await page.evaluate(() => {
+          const countEl = document.querySelector('[data-testid="search-result-count"]');
+          if (countEl) {
+            const m = countEl.textContent.match(/[\d,]+/);
+            if (m) return parseInt(m[0].replace(/,/g, ''), 10);
+          }
+          const allEls = Array.from(document.querySelectorAll('span, p, div, h2, h3'));
+          for (const el of allEls) {
+            const text = el.textContent || '';
+            const m = text.match(/^([\d,]+)\s*件/);
+            if (m && el.children.length <= 2) {
+              return parseInt(m[1].replace(/,/g, ''), 10);
+            }
+          }
+          return null;
+        });
+        if (totalListingCount !== null) {
+          console.log(`[件数取得] Mercari "${keyword}": ${totalListingCount}件`);
+        }
+      } catch (_) {}
+
       // ── 商品描画待機（スケルトン解消まで最大30秒）──────────────
       console.log('⏳ 商品の実描画を待機中（最大30秒）...');
       await page.waitForFunction(() => {
@@ -239,7 +263,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
         ).catch(() => []);
         console.log(`🔍 パターン3 [a[href*="/item/"]]: ${links.length}件`);
         if (links.length) {
-          return links.slice(0, limit).map(l => ({
+          const p3Results = links.slice(0, limit).map(l => ({
             product_id: l.url.split('/item/')[1]?.split('?')[0] || '',
             platform:   'mercari',
             title:      l.title,
@@ -248,6 +272,8 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
             image_url:  l.image,
             listed_at:  null,
           }));
+          p3Results.totalListingCount = totalListingCount;
+          return p3Results;
         }
       }
 
@@ -329,6 +355,7 @@ const searchUrl = `${this.baseUrl}/search?${params.toString()}`;
       }
 
       console.log(`✅ ${keyword} → ${results.length}件取得`);
+      results.totalListingCount = totalListingCount;
       return results;
 
     } catch (err) {

@@ -343,6 +343,7 @@ class ScrapingService {
       max_price: keyword.max_price,
       limit: 20,
     });
+    const totalListingCount = products.totalListingCount ?? null;
     console.log(`  📦 ${products.length}件の商品を取得（${platform}）`);
 
     // ② タイトルフィルタ（mercari / yahoo_flea / paypay_flea 共通）
@@ -453,6 +454,7 @@ class ScrapingService {
             expiryMonths: filterResult.expiryMonths,
             hoursOld:     filterResult.hoursOld,
             stockDisplay, rarity,
+            totalListingCount,
           });
           runLog(`  📱 LINE送信✅ [${keyword.keyword}/${platform}]: "${product.title}" ¥${product.price}`);
         } catch (notifyError) {
