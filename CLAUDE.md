@@ -84,6 +84,10 @@
 - 2026-05-11: purchase_master_cache はGAS廃止(2026-04-15)以降に新規登録されたSKUを自動追加しない設計だった。updateLastSalePrices() は既存itemのみ更新しnotFoundを捨てるため、初販売日が2026-04-16以降の商品が永久に漏れ続けるバグ。addMissingSkusFromSalesHistory() を sync-crossmall-prices.cjs に追加して根本修正済み（b4025bb）。2314-系かつ salesHistory に販売実績あり・cache未登録のSKUを syncStock() 前に自動追加する
 - 2026-05-11: crossmall_items DB（Telegramの商品検索対象）は purchase_master_cache をソースとして crossmall-items-sync（毎朝3:30）が更新する。cache に追加されても DB反映は翌朝まで待つか sync-crossmall-items.cjs を手動実行すること
 - 2026-05-11: crossmall-stock-sync の対象件数は crossmall_items DB の件数に連動（294件→約5分に増加）。PM2プロセス表のコメント「162件」は古い
+- 2026-05-18: 通知アップグレード（ce33881）完了。GoogleSheetsService.cjs 新規追加（仕入れ中シート取得）。LineNotificationService に calcStockDays/calcRarity/calcJudgement 追加。通知フォーマットに判定ラベル・在庫日数・出品レア度・仕入中個数・仕入れ実績を追加
+- 2026-05-18: GoogleSheetsService の credentials.json パスは .env に `GOOGLE_SHEETS_CREDENTIALS_PATH=C:/Users/Administrator/Desktop/pricera/credentials.json`（フォワードスラッシュ）で記載。バックスラッシュはnodeのheredoc経由で文字化けするため
+- 2026-05-18: スクレイパー（Mercari/Yahoo!フリマ）の search() 戻り値配列に totalListingCount プロパティを付与（JS配列はオブジェクトなのでプロパティ追加可）。既存の products.length / slice 等は影響なし
+- 2026-05-18: 出品レア度の判定基準: ≤2件=🔥レア、≤7件=普通、8件以上=多い。仕入れ推奨判定: 利益率<12%または在庫日数>60日は❌スルー、利益率≥20%かつ7日販売≥3かつ（在庫日数≤14またはレア）は✅即買い、それ以外は🤔検討
 
 ## 既知の未解決課題
 1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
