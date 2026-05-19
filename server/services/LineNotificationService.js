@@ -94,8 +94,7 @@ class LineNotificationService {
   // ─────────────────────────────────────────────
 
   /**
-   * Layer A を通過した商品を仕入れ推奨アラートとして通知する
-   * @param {string} targetId - LINE グループ ID
+   * Layer A を通過した商品を仕入れ推奨アラートとして broadcast 送信する
    * @param {object} params
    * @param {object} params.product      - 商品オブジェクト（title, price, url）
    * @param {object} params.keyword      - キーワードDBレコード

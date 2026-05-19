@@ -154,7 +154,6 @@ for (const p of envPaths) {
     const envContent = fs.readFileSync(p, 'utf8');
     const requiredKeys = [
       'LINE_BOT_TOKEN',
-      'LINE_GROUP_ID',
       'ENABLE_SCHEDULER',
       'SCRAPING_INTERVAL',
     ];
