@@ -64,52 +64,29 @@ class LineNotificationService {
   constructor() {
     this.config = {
       channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-      channelSecret:      process.env.LINE_CHANNEL_SECRET,
-      defaultGroupId:     (process.env.LINE_GROUP_ID || '').trim(),
       notifyEnabled:      (process.env.LINE_NOTIFY_ENABLED || 'true') === 'true',
     };
 
-    this._client        = null;
-    this._clientPromise = null;
-
-    if (!this.config.channelAccessToken || !this.config.channelSecret) {
-      console.warn('⚠️ LINE認証情報が未設定です（LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET）');
+    if (!this.config.channelAccessToken) {
+      console.warn('⚠️ LINE認証情報が未設定です（LINE_CHANNEL_ACCESS_TOKEN）');
     } else {
-      console.log('✅ LINE Messaging API 設定を検出（clientは遅延初期化）');
+      console.log('✅ LINE Messaging API 設定を検出（broadcast方式）');
     }
   }
 
-  // ─────────────────────────────────────────────
-  // クライアント初期化（既存・変更なし）
-  // ─────────────────────────────────────────────
-  async getClient() {
-    if (this._client) return this._client;
-    if (this._clientPromise) return (this._client = await this._clientPromise);
-
-    this._clientPromise = (async () => {
-      if (!this.config.channelAccessToken || !this.config.channelSecret) {
-        throw new Error('LINE認証情報が未設定です');
-      }
-      const sdkModule = await import('@line/bot-sdk');
-      const sdk = sdkModule?.default || sdkModule;
-      const MessagingApiClient = sdk?.messagingApi?.MessagingApiClient;
-      if (!MessagingApiClient) {
-        throw new Error('MessagingApiClient が見つかりません（@line/bot-sdk 形式変更の可能性）');
-      }
-      const client = new MessagingApiClient({
-        channelAccessToken: this.config.channelAccessToken,
-      });
-      console.log('✅ LINE Messaging API クライアント初期化完了（遅延）');
-      return client;
-    })();
-
-    return (this._client = await this._clientPromise);
-  }
-
-  resolveTargetId(targetId) {
-    const fromArg = typeof targetId === 'string' ? targetId.trim() : '';
-    if (fromArg) return fromArg;
-    return this.config.defaultGroupId || '';
+  async _broadcast(text) {
+    const res = await fetch('https://api.line.me/v2/bot/message/broadcast', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.config.channelAccessToken}`,
+      },
+      body: JSON.stringify({ messages: [{ type: 'text', text }] }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`LINE broadcast失敗 (${res.status}): ${body}`);
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -129,15 +106,13 @@ class LineNotificationService {
    * @param {number|null} params.stockDisplay  - 表示用在庫数
    * @param {{ label: string, emoji: string }} params.rarity - 希少度
    */
-  async notifyPurchaseAlert(targetId, params) {
+  async notifyPurchaseAlert(params) {
     if (!this.config.notifyEnabled) {
       console.log('ℹ️ LINE通知は無効化されています（LINE_NOTIFY_ENABLED=false）');
       return false;
     }
-
-    const to = this.resolveTargetId(targetId);
-    if (!to) {
-      console.warn('⚠️ LINE送信先が未設定です（LINE_GROUP_ID を .env に設定してください）');
+    if (!this.config.channelAccessToken) {
+      console.warn('⚠️ LINE_CHANNEL_ACCESS_TOKENが未設定のため通知スキップ');
       return false;
     }
 
@@ -159,18 +134,12 @@ class LineNotificationService {
     const text = this.buildPurchaseAlertText({ ...params, purchasingCount, purchaseHistory });
 
     try {
-      const client = await this.getClient();
-      await client.pushMessage({
-        to,
-        messages: [{ type: 'text', text }],
-      });
-      console.log(`✅ 仕入れ推奨アラート送信完了: "${params.product?.title}"`);
+      await this._broadcast(text);
+      console.log(`✅ 仕入れ推奨アラート broadcast送信完了: "${params.product?.title}"`);
       await this.markProductsAsNotified([params.product]);
       return true;
     } catch (error) {
-      console.error('❌ LINE通知送信エラー:', error);
-      if (error?.body)   console.error('   LINE error body:', error.body);
-      if (error?.status) console.error('   status:', error.status);
+      console.error('❌ LINE通知送信エラー:', error.message);
       return false;
     }
   }
@@ -258,15 +227,13 @@ class LineNotificationService {
   // 既存メソッド（変更なし）
   // ─────────────────────────────────────────────
 
-  async notifyNewProducts(targetId, products, keyword) {
+  async notifyNewProducts(products, keyword) {
     if (!this.config.notifyEnabled) {
       console.log('ℹ️ LINE通知は無効化されています（LINE_NOTIFY_ENABLED=false）');
       return false;
     }
-
-    const to = this.resolveTargetId(targetId);
-    if (!to) {
-      console.warn('⚠️ LINE送信先が未設定です（LINE_GROUP_ID を .env に設定してください）');
+    if (!this.config.channelAccessToken) {
+      console.warn('⚠️ LINE_CHANNEL_ACCESS_TOKENが未設定のため通知スキップ');
       return false;
     }
 
@@ -275,41 +242,33 @@ class LineNotificationService {
       return false;
     }
 
-    try {
-      const client = await this.getClient();
-
-      let crossmallInfo = null;
-      if (keyword?.crossmall_item_code) {
-        const baseCode = CrossmallDbService.deriveBaseCode(keyword.crossmall_item_code);
-        const dbInfo = await CrossmallDbService.getStockAndPriceByBaseCode(baseCode).catch(() => null);
-        if (dbInfo) {
-          crossmallInfo = {
-            item_code:    keyword.crossmall_item_code,
-            stock:        dbInfo.stock ?? null,
-            price:        dbInfo.lastSalePrice ?? null,
-            sales28:      dbInfo.sales28 ?? 0,
-            sales7:       dbInfo.sales7  ?? 0,
-            lastSaleDate: dbInfo.lastSaleDate ?? null,
-            deliveryType: dbInfo.deliveryType ?? null,
-            item_name:    dbInfo.item_name ?? null,
-          };
-        }
+    let crossmallInfo = null;
+    if (keyword?.crossmall_item_code) {
+      const baseCode = CrossmallDbService.deriveBaseCode(keyword.crossmall_item_code);
+      const dbInfo = await CrossmallDbService.getStockAndPriceByBaseCode(baseCode).catch(() => null);
+      if (dbInfo) {
+        crossmallInfo = {
+          item_code:    keyword.crossmall_item_code,
+          stock:        dbInfo.stock ?? null,
+          price:        dbInfo.lastSalePrice ?? null,
+          sales28:      dbInfo.sales28 ?? 0,
+          sales7:       dbInfo.sales7  ?? 0,
+          lastSaleDate: dbInfo.lastSaleDate ?? null,
+          deliveryType: dbInfo.deliveryType ?? null,
+          item_name:    dbInfo.item_name ?? null,
+        };
       }
+    }
 
-      const message = this.createProductListMessage(products, keyword, crossmallInfo);
+    const message = this.createProductListMessage(products, keyword, crossmallInfo);
 
-      await client.pushMessage({
-        to,
-        messages: [{ type: 'text', text: message }],
-      });
-
-      console.log(`✅ LINE通知送信完了: ${to}`);
+    try {
+      await this._broadcast(message);
+      console.log('✅ LINE broadcast通知送信完了');
       await this.markProductsAsNotified(products);
       return true;
     } catch (error) {
-      console.error('❌ LINE通知送信エラー:', error);
-      if (error?.body)   console.error('   LINE error body:', error.body);
-      if (error?.status) console.error('   status:', error.status);
+      console.error('❌ LINE通知送信エラー:', error.message);
       return false;
     }
   }

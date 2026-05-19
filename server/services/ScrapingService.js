@@ -415,9 +415,6 @@ class ScrapingService {
     }
 
     // ⑤ Layer A フィルタ → 通知
-    const enabled = (process.env.LINE_NOTIFY_ENABLED || 'true') === 'true';
-    const groupId = (process.env.LINE_GROUP_ID || '').trim();
-
     let passCount = 0;
     let failCount = 0;
 
@@ -441,26 +438,18 @@ class ScrapingService {
       const rarity  = calcRarityScore(sales28);
       const master  = crossmallInfo;
 
-      if (!enabled) {
-        console.log('  ℹ️ LINE通知は無効化されています');
-        runLog(`  ℹ️ LINE無効化スキップ [${keyword.keyword}]: "${product.title}"`);
-      } else if (!groupId) {
-        console.log('  ⚠️ LINE_GROUP_ID 未設定のため通知スキップ');
-        runLog(`  ⚠️ LINE_GROUP_ID未設定スキップ [${keyword.keyword}]: "${product.title}"`);
-      } else {
-        try {
-          await this.lineNotificationService.notifyPurchaseAlert(groupId, {
-            product, keyword, master, crossmallInfo,
-            expiryMonths: filterResult.expiryMonths,
-            hoursOld:     filterResult.hoursOld,
-            stockDisplay, rarity,
-            totalListingCount,
-          });
-          runLog(`  📱 LINE送信✅ [${keyword.keyword}/${platform}]: "${product.title}" ¥${product.price}`);
-        } catch (notifyError) {
-          console.error('  ❌ LINE通知送信エラー:', notifyError);
-          runLog(`  ❌ LINE送信失敗 [${keyword.keyword}/${platform}]: "${product.title}" エラー: ${notifyError.message}`);
-        }
+      try {
+        await this.lineNotificationService.notifyPurchaseAlert({
+          product, keyword, master, crossmallInfo,
+          expiryMonths: filterResult.expiryMonths,
+          hoursOld:     filterResult.hoursOld,
+          stockDisplay, rarity,
+          totalListingCount,
+        });
+        runLog(`  📱 LINE送信✅ [${keyword.keyword}/${platform}]: "${product.title}" ¥${product.price}`);
+      } catch (notifyError) {
+        console.error('  ❌ LINE通知送信エラー:', notifyError);
+        runLog(`  ❌ LINE送信失敗 [${keyword.keyword}/${platform}]: "${product.title}" エラー: ${notifyError.message}`);
       }
     }
 
