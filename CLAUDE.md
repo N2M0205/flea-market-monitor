@@ -88,6 +88,7 @@
 - 2026-05-18: GoogleSheetsService の credentials.json パスは .env に `GOOGLE_SHEETS_CREDENTIALS_PATH=C:/Users/Administrator/Desktop/pricera/credentials.json`（フォワードスラッシュ）で記載。バックスラッシュはnodeのheredoc経由で文字化けするため
 - 2026-05-18: スクレイパー（Mercari/Yahoo!フリマ）の search() 戻り値配列に totalListingCount プロパティを付与（JS配列はオブジェクトなのでプロパティ追加可）。既存の products.length / slice 等は影響なし
 - 2026-05-18: 出品レア度の判定基準: ≤2件=🔥レア、≤7件=普通、8件以上=多い。仕入れ推奨判定: 利益率<12%または在庫日数>60日は❌スルー、利益率≥20%かつ7日販売≥3かつ（在庫日数≤14またはレア）は✅即買い、それ以外は🤔検討
+- 2026-05-19: LINE通知をpushMessage（グループ）→ broadcast に統一完了（fix/line-broadcast-unification）。LINE友達=バイヤーチームのみの運用のため全通知をbroadcastに統一。LineNotificationService から @line/bot-sdk の MessagingApiClient を廃止し fetch direct 方式（health-check.cjs と同方式）に統一。notifyPurchaseAlert(targetId, params) → notifyPurchaseAlert(params) にシグネチャ変更。LINE_GROUP_ID は .env でコメントアウト済み（値は保持）。line-test.js と LineService.js は旧テスト/Webhook管理用の別系統で今回スコープ外
 
 ## 既知の未解決課題
 1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
