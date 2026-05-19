@@ -38,15 +38,16 @@ async function upsertSaleToDb(orderNumber, orderDate, deliveryType, details) {
       (a.item_code || '').localeCompare(b.item_code || '')
     );
     const rows = sorted.map((d, i) => {
+      const qty = d.amount || 1;
       const unitPrice = Math.round(d.unit_price || 0);
       return {
         order_number: orderNumber,
         line_no: i + 1,
         item_code: d.item_code,
         order_date: new Date(orderDate + 'T00:00:00Z'),
-        amount: 1,
+        amount: qty,
         unit_price: unitPrice,
-        amount_price: unitPrice,
+        amount_price: unitPrice * qty,
         delivery_type: deliveryType || null,
         synced_at: now,
         created_at: now,
