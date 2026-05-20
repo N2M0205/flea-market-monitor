@@ -15,6 +15,7 @@ const { loadLayerAConfig, layerAFilter, calcRarityScore } = require('./LayerAFil
 const CrossmallDbService = require('./CrossmallDbService');
 const { log: runLog } = require('../src/utils/RunLogger');
 const { detectSetQuantity } = require('../utils/priceUtils');
+const { matchVariant }     = require('../utils/variantMatcher');
 
 // ============================================================
 // タイトルフィルタ ユーティリティ
@@ -461,6 +462,16 @@ class ScrapingService {
       if (setQty > 1) {
         console.log(`  📦 セット検出: "${product.title}" → ${setQty}個セット 単価¥${unitPrice.toLocaleString()}`);
       }
+
+      // ─── バリアントマッチングのデバッグログ（フェーズ1テスト用）───
+      try {
+        const { KeywordVariant } = require('../models');
+        const keywordVariants = await KeywordVariant.findAll({ where: { keyword_id: keyword.id } });
+        if (keywordVariants.length > 0) {
+          const { matched } = matchVariant(product.title, keywordVariants);
+          console.log(`🔬 [バリアント判定] "${product.title}" → ${matched ? matched.variant_name + '(' + matched.item_code + ')' : '未マッチ（全バリアント）'}`);
+        }
+      } catch (_varErr) { /* モデル未反映時も通知は継続 */ }
 
       try {
         await this.lineNotificationService.notifyPurchaseAlert({

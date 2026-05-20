@@ -25,10 +25,17 @@ const CrossmallItem  = require('./CrossmallItem')(sequelize, DataTypes);
 const CrossmallStock = require('./CrossmallStock')(sequelize, DataTypes);
 const CrossmallSale  = require('./CrossmallSale')(sequelize, DataTypes);
 
+// バリアントモデル
+const KeywordVariant = require('./KeywordVariant')(sequelize, DataTypes);
+
 // リレーションシップの定義
 // Users 1:N Keywords
 User.hasMany(Keyword, { foreignKey: 'user_id', as: 'keywords' });
 Keyword.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// Keywords 1:N KeywordVariants
+Keyword.hasMany(KeywordVariant, { foreignKey: 'keyword_id', as: 'variants' });
+KeywordVariant.belongsTo(Keyword, { foreignKey: 'keyword_id', as: 'keyword' });
 
 // Users 1:N Notifications
 User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
@@ -84,6 +91,7 @@ const db = {
   CrossmallItem,
   CrossmallStock,
   CrossmallSale,
+  KeywordVariant,
 };
 
 module.exports = db;
