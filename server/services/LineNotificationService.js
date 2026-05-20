@@ -52,6 +52,7 @@ function calcRarity(totalListingCount) {
 
 function calcJudgement(profitRate, sales7, stockDays, rarityLabel) {
   const isRare = rarityLabel === '🔥 レア';
+  if (profitRate > 60)   return '⚠️ 利益率確認';
   if (profitRate <= -50) return '⚠️ 個数確認';
   if (profitRate < 0)    return '❌ 赤字';
   if (profitRate <= 5)   return '❌ 利益なし';
