@@ -52,12 +52,17 @@ function calcRarity(totalListingCount) {
 
 function calcJudgement(profitRate, sales7, stockDays, rarityLabel) {
   const isRare = rarityLabel === '🔥 レア';
-  if (profitRate < 12) return '❌ スルー';
-  if (stockDays !== Infinity && stockDays > 60) return '❌ スルー';
-  if (profitRate >= 20 && sales7 >= 3 && (stockDays <= 14 || isRare)) {
-    return '✅ 即買い';
-  }
-  return '🤔 検討';
+  if (profitRate <= -50) return '⚠️ 個数確認';
+  if (profitRate < 0)    return '❌ 赤字';
+  if (profitRate <= 5)   return '❌ 利益なし';
+  if (profitRate < 12)   return '❌ 利益薄い';
+  // ── 利益率12%以上 ──
+  if (stockDays !== Infinity && stockDays <= 7)      return '🚨 緊急仕入';
+  if (profitRate >= 30 && sales7 >= 3)               return '💎 高利益';
+  if (profitRate >= 20 && sales7 >= 3 && stockDays <= 14) return '✅ 即買い';
+  if (isRare)                                        return '🔥 レア即買';
+  if (sales7 <= 2)                                   return '🤔 売行鈍い';
+  return '🤔 要検討';
 }
 
 class LineNotificationService {
