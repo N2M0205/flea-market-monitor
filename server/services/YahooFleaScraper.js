@@ -256,8 +256,12 @@ class YahooFleaScraper {
               const stmMatch = dataClParams.match(/stm=(\d+)/);
               const stm = stmMatch ? parseInt(stmMatch[1]) : null;
 
+              // 商品状態ラベルの取得（複数セレクタを試みる）
+              const condEl = card.querySelector('[class*="condition" i], [class*="Condition"], [data-testid="condition"], [class*="item-condition"], [class*="itemCondition"]');
+              const condition = condEl?.textContent?.trim() || null;
+
               if (productId && title && price !== '0' && url) {
-                items.push({ product_id: productId, title, price, url, image_url: imageUrl, stm });
+                items.push({ product_id: productId, title, price, url, image_url: imageUrl, stm, condition });
               }
             } catch (e) {
               // skip individual item errors
@@ -328,6 +332,10 @@ class YahooFleaScraper {
                 const stmMatch2 = dataClParams2.match(/stm=(\d+)/);
                 const stm2 = stmMatch2 ? parseInt(stmMatch2[1]) : null;
 
+                // 商品状態ラベルの取得
+                const condEl2 = card.querySelector('[class*="condition" i], [class*="Condition"], [data-testid="condition"], [class*="item-condition"], [class*="itemCondition"]');
+                const condition2 = condEl2?.textContent?.trim() || null;
+
                 if (productId && title && price !== '0') {
                   items.push({
                     product_id: productId,
@@ -336,6 +344,7 @@ class YahooFleaScraper {
                     url: link.href,
                     image_url: img.src || '',
                     stm: stm2,
+                    condition: condition2,
                   });
                 }
               } catch (e) {
@@ -380,7 +389,7 @@ class YahooFleaScraper {
         price:        parseInt(p.price, 10) || 0,
         url:          String(p.url).trim(),
         image_url:    String(p.image_url || '').trim() || null,
-        condition:    null,
+        condition:    p.condition || null,  // 検索結果HTMLから取得（取得できない場合はnull、NG_WORDSで補完）
         seller_id:    null,
         free_shipping: null,
         listed_at:    p.stm ? new Date(p.stm * 1000) : null,

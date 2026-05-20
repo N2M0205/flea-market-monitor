@@ -8,12 +8,14 @@ const path = require('path');
 // 設定ファイルのパス
 const CONFIG_PATH = path.resolve(__dirname, '../config/layerA.json');
 
-// NG語句リスト
+// NG語句リスト（タイトル・説明文に含まれていれば除外）
 const NG_WORDS = [
   '開封済',　'使用済', '使用中', '中古', '箱なし', '箱無し',
   'ジャンク', '破損', '傷あり', '傷有り', '汚れあり', '汚れ有り',
   '訳あり', '訳有り', '欠品', 'シール剥がし', 'シール剥がれ',
   'タグなし', 'タグ無し', '期限切れ', '賞味期限切れ',
+  // 商品状態ラベル（conditionが取得できない場合はタイトル文言で補完）
+  '未使用に近い', '目立った傷や汚れなし', 'やや傷や汚れあり', '傷や汚れあり', '全体的に状態が悪い',
 ];
 
 // デフォルト閾値
@@ -107,6 +109,13 @@ function layerAFilter(product, keyword, config) {
   const ngWord = NG_WORDS.find(w => fullText.includes(w));
   if (ngWord) {
     return { pass: false, reason: `NG語句検出: "${ngWord}"`, expiryMonths, hoursOld: hoursOld || 0 };
+  }
+
+  // ─── 条件5.5: 商品状態フィルタ（conditionが取得できた場合のみ適用）───
+  // 許可: "新品、未使用" のみ。未取得(null)はNG_WORDSで補完されるためスルー
+  const ALLOWED_CONDITIONS = ['新品、未使用'];
+  if (product.condition && !ALLOWED_CONDITIONS.includes(product.condition)) {
+    return { pass: false, reason: `商品状態除外: "${product.condition}"（新品、未使用のみ対象）`, expiryMonths, hoursOld: hoursOld || 0 };
   }
 
   // ─── 条件6: 除外キーワード ───
