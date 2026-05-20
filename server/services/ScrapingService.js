@@ -438,6 +438,22 @@ class ScrapingService {
       const rarity  = calcRarityScore(sales28);
       const master  = crossmallInfo;
 
+      // ─── 過剰在庫チェック（CROSSMALL情報がある場合のみ適用）───
+      if (crossmallInfo) {
+        const _stock   = crossmallInfo.stock   ?? 0;
+        const _sales28 = crossmallInfo.sales28 ?? 0;
+        const stockDays = _stock === 0 ? 0
+          : _sales28 === 0 ? Infinity
+          : Math.round(_stock / (_sales28 / 28));
+
+        if (stockDays > 60 || stockDays === Infinity) {
+          const daysLabel = stockDays === Infinity ? '∞' : `${stockDays}日`;
+          console.log(`  ⏭️ 過剰在庫のためスキップ: "${product.title}" (在庫日数: ${daysLabel})`);
+          runLog(`  ⏭️ 過剰在庫スキップ [${keyword.keyword}/${platform}]: "${product.title}" 在庫日数: ${daysLabel}`);
+          continue;
+        }
+      }
+
       try {
         await this.lineNotificationService.notifyPurchaseAlert({
           product, keyword, master, crossmallInfo,
