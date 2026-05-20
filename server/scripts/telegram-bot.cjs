@@ -28,7 +28,7 @@ process.chdir(path.join(__dirname, '..'));
 const TelegramBot = require('node-telegram-bot-api');
 const { Op } = require('sequelize');
 const db = require('../models');
-const { sequelize, Keyword, Product, User, CrossmallItem } = db;
+const { sequelize, Keyword, Product, User, CrossmallItem, KeywordVariant } = db;
 const InventoryAlertService = require('../services/InventoryAlertService');
 const INVENTORY_CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'purchase_master_cache.json');
 
@@ -61,7 +61,8 @@ const MAIN_KEYBOARD = {
     keyboard: [
       [{ text: '📋 一覧' }, { text: '➕ 追加' }],
       [{ text: '🗑 削除' }, { text: '🚫 除外設定' }],
-      [{ text: '💰 価格設定' }, { text: '📦 在庫' }, { text: '📊 ステータス' }]
+      [{ text: '💰 価格設定' }, { text: '🧬 バリアント' }],
+      [{ text: '📦 在庫' }, { text: '📊 ステータス' }]
     ],
     resize_keyboard: true,
     persistent: true
@@ -167,6 +168,11 @@ bot.on('message', async (msg) => {
   if (text === '💰 価格設定') {
     userStates.delete(userId);
     await handlePriceStart(chatId);
+    return;
+  }
+  if (text === '🧬 バリアント') {
+    userStates.delete(userId);
+    await handleVariantStart(chatId);
     return;
   }
   if (text === '📦 在庫') {
@@ -306,6 +312,20 @@ bot.on('callback_query', async (query) => {
   } else if (data.startsWith('cat:')) {
     await handleCategoryCallback(chatId, userId, query, data);
 
+  // ─── バリアント管理フロー ───
+  } else if (data.startsWith('vmenu_')) {
+    await handleVariantMenu(chatId, userId, data.slice(6));
+  } else if (data.startsWith('vadd_')) {
+    await handleVariantAddStart(chatId, userId, data.slice(5));
+  } else if (data.startsWith('vdel_')) {
+    await handleVariantDelList(chatId, data.slice(5));
+  } else if (data.startsWith('vdelc_')) {
+    await handleVariantDelConfirm(chatId, data.slice(6));
+  } else if (data.startsWith('vdelx_')) {
+    await handleVariantDelExec(chatId, data.slice(6));
+  } else if (data.startsWith('vdone_')) {
+    await handleVariantDone(chatId, userId, data.slice(6));
+  
   // ─── 汎用キャンセル ───
   } else if (data === 'cancel') {
     userStates.delete(userId);
@@ -392,6 +412,15 @@ async function handleStateFlow(chatId, userId, text, state) {
 
   } else if (state.step === 'edit_price') {
     await handleEditPriceInput(chatId, userId, text, state);
+  } else if (state.step === 'var:code') {
+    await handleVariantCodeInput(chatId, userId, text, state);
+  } else if (state.step === 'var:name') {
+    userStates.set(userId, { ...state, variantName: text, step: 'var:words' });
+    await bot.sendMessage(chatId, 'マッチングキーワードをカンマ区切りで入力してください\n例: マンゴー,まんごー,mango\n※ フリマタイトルに含まれる文字列');
+  } else if (state.step === 'var:words') {
+    const words = text.split(',').map(w => w.trim()).filter(Boolean);
+    userStates.set(userId, { ...state, matchWords: words, step: 'var:confirm' });
+    await showVariantConfirm(chatId, userId);
   }
 }
 
@@ -1404,6 +1433,139 @@ async function handleStatus(chatId) {
   }
 }
 
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🧬 バリアント管理フロー
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/** キーワード選択一覧を表示 */
+async function handleVariantStart(chatId) {
+  try {
+    const keywords = await Keyword.findAll({ where: { is_active: true }, order: [['created_at', 'ASC']] });
+    if (keywords.length === 0) { await replyWithKeyboard(chatId, '登録キーワードがありません'); return; }
+    const counts = await KeywordVariant.findAll({
+      attributes: ['keyword_id', [sequelize.fn('COUNT', sequelize.col('id')), 'cnt']],
+      group: ['keyword_id'], raw: true,
+    });
+    const countMap = Object.fromEntries(counts.map(r => [r.keyword_id, parseInt(r.cnt)]));
+    const buttons = keywords.map(kw => {
+      const n = countMap[kw.id] || 0;
+      const label = n > 0 ? `${kw.keyword}（${n}件）` : kw.keyword;
+      return [{ text: label, callback_data: `vmenu_${kw.id}` }];
+    });
+    buttons.push([{ text: '❌ キャンセル', callback_data: 'cancel' }]);
+    await bot.sendMessage(chatId, '🧬 バリアント管理するキーワードを選択:', { reply_markup: { inline_keyboard: buttons } });
+  } catch (err) { console.error('[variant] start:', err.message); await replyWithKeyboard(chatId, `❌ ${err.message}`); }
+}
+
+/** バリアント管理画面（一覧＋追加/削除ボタン） */
+async function handleVariantMenu(chatId, userId, kwId) {
+  try {
+    const kw = await Keyword.findByPk(kwId);
+    if (!kw) { await replyWithKeyboard(chatId, '❌ キーワードが見つかりません'); return; }
+    const variants = await KeywordVariant.findAll({ where: { keyword_id: kwId }, order: [['sort_order', 'ASC']] });
+    let text = `🧬 「${kw.keyword}」のバリアント管理\n\n`;
+    if (variants.length === 0) { text += 'バリアント未登録'; }
+    else {
+      text += `現在登録: ${variants.length}件\n`;
+      text += variants.map(v => {
+        const words = JSON.parse(v.match_words || '[]');
+        return `・${v.variant_name} (${v.item_code}) [${words.join(',')}]`;
+      }).join('\n');
+    }
+    const inline = [[{ text: '➕ バリアント追加', callback_data: `vadd_${kwId}` }]];
+    if (variants.length > 0) inline.push([{ text: '🗑 バリアント削除', callback_data: `vdel_${kwId}` }]);
+    inline.push([{ text: '← 戻る', callback_data: 'cancel' }]);
+    await bot.sendMessage(chatId, text, { reply_markup: { inline_keyboard: inline } });
+  } catch (err) { console.error('[variant] menu:', err.message); await replyWithKeyboard(chatId, `❌ ${err.message}`); }
+}
+
+/** バリアント追加フロー開始 */
+async function handleVariantAddStart(chatId, userId, kwId) {
+  userStates.set(userId, { step: 'var:code', keywordId: kwId });
+  await bot.sendMessage(chatId, '商品コードを入力してください\n例: 2314-001234',
+    { reply_markup: { inline_keyboard: [[{ text: '❌ キャンセル', callback_data: 'cancel' }]] } });
+}
+
+/** 商品コード入力受付 → CrossmallItem で存在確認 */
+async function handleVariantCodeInput(chatId, userId, text, state) {
+  const code = text.trim().toUpperCase();
+  try {
+    const item = await CrossmallItem.findOne({ where: { item_code: code } });
+    if (!item) {
+      await bot.sendMessage(chatId, `❌ 商品コード「${code}」はCROSSMALL DBにありません。正しいコードを入力してください`,
+        { reply_markup: { inline_keyboard: [[{ text: '❌ キャンセル', callback_data: 'cancel' }]] } });
+      return;
+    }
+    userStates.set(userId, { ...state, itemCode: code, itemName: item.item_name, step: 'var:name' });
+    await bot.sendMessage(chatId, `✅ 商品確認: ${item.item_name}\n\nバリアント名を入力してください（通知表示用）\n例: ブドウ、もも、マンゴー`);
+  } catch (err) { console.error('[variant] code:', err.message); await replyWithKeyboard(chatId, `❌ ${err.message}`); }
+}
+
+/** バリアント追加の確認画面 */
+async function showVariantConfirm(chatId, userId) {
+  const state = userStates.get(userId);
+  const text = `以下の内容で追加しますか？\n商品コード: ${state.itemCode}\n商品名: ${state.itemName}\nバリアント名: ${state.variantName}\nマッチキーワード: ${state.matchWords.join(', ')}`;
+  await bot.sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[
+    { text: '✅ 追加する', callback_data: `vdone_${state.keywordId}` },
+    { text: '❌ キャンセル', callback_data: 'cancel' }
+  ]] } });
+}
+
+/** バリアント追加実行 */
+async function handleVariantDone(chatId, userId, kwId) {
+  const state = userStates.get(userId);
+  userStates.delete(userId);
+  if (!state || state.step !== 'var:confirm' || !state.itemCode) {
+    await replyWithKeyboard(chatId, '❌ セッション切れ。最初からやり直してください'); return;
+  }
+  try {
+    const maxOrder = await KeywordVariant.max('sort_order', { where: { keyword_id: kwId } });
+    await KeywordVariant.create({
+      keyword_id: kwId, item_code: state.itemCode,
+      variant_name: state.variantName, match_words: JSON.stringify(state.matchWords),
+      sort_order: (maxOrder || 0) + 1,
+    });
+    await replyWithKeyboard(chatId, `✅ バリアント「${state.variantName}」(${state.itemCode})を登録しました`);
+  } catch (err) { console.error('[variant] done:', err.message); await replyWithKeyboard(chatId, `❌ ${err.message}`); }
+}
+
+/** バリアント削除: 一覧ボタン表示 */
+async function handleVariantDelList(chatId, kwId) {
+  try {
+    const kw = await Keyword.findByPk(kwId);
+    if (!kw) { await replyWithKeyboard(chatId, '❌ キーワードが見つかりません'); return; }
+    const variants = await KeywordVariant.findAll({ where: { keyword_id: kwId }, order: [['sort_order', 'ASC']] });
+    if (variants.length === 0) { await replyWithKeyboard(chatId, 'バリアントが登録されていません'); return; }
+    const buttons = variants.map(v => [{ text: `${v.variant_name} (${v.item_code})`, callback_data: `vdelc_${v.id}` }]);
+    buttons.push([{ text: '❌ キャンセル', callback_data: 'cancel' }]);
+    await bot.sendMessage(chatId, '削除するバリアントを選択してください:', { reply_markup: { inline_keyboard: buttons } });
+  } catch (err) { console.error('[variant] del list:', err.message); await replyWithKeyboard(chatId, `❌ ${err.message}`); }
+}
+
+/** バリアント削除: 確認 */
+async function handleVariantDelConfirm(chatId, variantId) {
+  try {
+    const v = await KeywordVariant.findByPk(variantId);
+    if (!v) { await replyWithKeyboard(chatId, '❌ バリアントが見つかりません'); return; }
+    await bot.sendMessage(chatId, `「${v.variant_name}」(${v.item_code}) を削除しますか？`,
+      { reply_markup: { inline_keyboard: [[
+        { text: `🗑 削除する`, callback_data: `vdelx_${variantId}` },
+        { text: '❌ キャンセル', callback_data: 'cancel' }
+      ]] } });
+  } catch (err) { console.error('[variant] del confirm:', err.message); await replyWithKeyboard(chatId, `❌ ${err.message}`); }
+}
+
+/** バリアント削除: 実行 */
+async function handleVariantDelExec(chatId, variantId) {
+  try {
+    const v = await KeywordVariant.findByPk(variantId);
+    if (!v) { await replyWithKeyboard(chatId, '❌ バリアントが見つかりません'); return; }
+    const name = v.variant_name; const code = v.item_code;
+    await v.destroy();
+    await replyWithKeyboard(chatId, `✅ バリアント「${name}」(${code})を削除しました`);
+  } catch (err) { console.error('[variant] del exec:', err.message); await replyWithKeyboard(chatId, `❌ ${err.message}`); }
+}
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 起動
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
