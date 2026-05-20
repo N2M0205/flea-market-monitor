@@ -145,7 +145,7 @@ class LineNotificationService {
 
   // ② 通知テキスト組み立て（新フォーマット）
   buildPurchaseAlertText(params) {
-    const { product, master, crossmallInfo, totalListingCount, purchasingCount, purchaseHistory, setQty, unitPrice } = params;
+    const { product, master, crossmallInfo, totalListingCount, purchasingCount, purchaseHistory, setQty, unitPrice, variantUnknown } = params;
 
     const price         = Number(product?.price) || 0;
     const effectivePrice = (setQty > 1 && unitPrice > 0) ? unitPrice : price;
@@ -208,6 +208,7 @@ class LineNotificationService {
 
     const lines = [
       judgement || '🤔 検討',
+      ...(variantUnknown ? ['⚠️ バリアント不明（デフォルト表示）'] : []),
       '',
       `🛒 ${product?.title || '─'}`,
       priceDisp,

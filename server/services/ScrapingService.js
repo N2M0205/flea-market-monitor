@@ -416,6 +416,38 @@ class ScrapingService {
       }
     }
 
+    // ④.5 バリアントのcrossmallInfo事前取得（ループ内で商品ごとに使い分ける）
+    const { KeywordVariant } = require('../models');
+    const keywordVariants = await KeywordVariant.findAll({
+      where:  { keyword_id: keyword.id },
+      order:  [['sort_order', 'ASC']],
+    });
+    const variantCrossmallMap = new Map(); // item_code → crossmallInfo
+    if (keywordVariants.length > 0) {
+      // デフォルトSKUは取得済みのcrossmallInfoを再利用
+      if (keyword.crossmall_item_code && crossmallInfo) {
+        variantCrossmallMap.set(keyword.crossmall_item_code, crossmallInfo);
+      }
+      for (const v of keywordVariants) {
+        if (!v.item_code || variantCrossmallMap.has(v.item_code)) continue;
+        const baseCode = CrossmallDbService.deriveBaseCode(v.item_code);
+        const dbInfo   = await CrossmallDbService.getStockAndPriceByBaseCode(baseCode);
+        if (dbInfo) {
+          variantCrossmallMap.set(v.item_code, {
+            item_code:    v.item_code,
+            stock:        dbInfo.stock        ?? null,
+            price:        dbInfo.lastSalePrice ?? null,
+            sales28:      dbInfo.sales28       ?? 0,
+            sales7:       dbInfo.sales7        ?? 0,
+            lastSaleDate: dbInfo.lastSaleDate  ?? null,
+            deliveryType: dbInfo.deliveryType  ?? null,
+            item_name:    dbInfo.item_name     ?? null,
+          });
+        }
+      }
+      console.log(`  🧬 バリアント ${keywordVariants.length}件プリロード済み（${variantCrossmallMap.size}件取得）`);
+    }
+
     // ⑤ Layer A フィルタ → 通知
     let passCount = 0;
     let failCount = 0;
@@ -434,16 +466,31 @@ class ScrapingService {
       console.log(`  ✅ Layer A 通過: "${product.title}"`);
       runLog(`  ✅ Layer A合格 [${keyword.keyword}/${platform}]: "${product.title}" ¥${product.price}`);
 
-      // crossmallInfo は DB から取得済み（上の ④ で設定）
-      const stockDisplay = crossmallInfo?.stock ?? null;
-      const sales28 = crossmallInfo?.sales28 ?? null;
+      // ─── バリアントマッチング → 商品ごとの crossmallInfo を決定 ───
+      let productCrossmallInfo = crossmallInfo;
+      let variantUnknown = false;
+      if (keywordVariants.length > 0) {
+        const { matched } = matchVariant(product.title, keywordVariants);
+        if (matched) {
+          productCrossmallInfo = variantCrossmallMap.get(matched.item_code) ?? crossmallInfo;
+          console.log(`  ✅ [バリアント特定] "${matched.variant_name}" (${matched.item_code})`);
+          runLog(`  ✅ バリアント特定 [${keyword.keyword}/${platform}]: "${product.title}" → ${matched.variant_name}(${matched.item_code})`);
+        } else {
+          variantUnknown = true;
+          console.log(`  ⚠️ [バリアント未特定] "${product.title}" → デフォルトSKU使用`);
+          runLog(`  ⚠️ バリアント未特定 [${keyword.keyword}/${platform}]: "${product.title}"`);
+        }
+      }
+
+      const stockDisplay = productCrossmallInfo?.stock ?? null;
+      const sales28 = productCrossmallInfo?.sales28 ?? null;
       const rarity  = calcRarityScore(sales28);
-      const master  = crossmallInfo;
+      const master  = productCrossmallInfo;
 
       // ─── 過剰在庫チェック（CROSSMALL情報がある場合のみ適用）───
-      if (crossmallInfo) {
-        const _stock   = crossmallInfo.stock   ?? 0;
-        const _sales28 = crossmallInfo.sales28 ?? 0;
+      if (productCrossmallInfo) {
+        const _stock   = productCrossmallInfo.stock   ?? 0;
+        const _sales28 = productCrossmallInfo.sales28 ?? 0;
         const stockDays = _stock === 0 ? 0
           : _sales28 === 0 ? Infinity
           : Math.round(_stock / (_sales28 / 28));
@@ -463,24 +510,15 @@ class ScrapingService {
         console.log(`  📦 セット検出: "${product.title}" → ${setQty}個セット 単価¥${unitPrice.toLocaleString()}`);
       }
 
-      // ─── バリアントマッチングのデバッグログ（フェーズ1テスト用）───
-      try {
-        const { KeywordVariant } = require('../models');
-        const keywordVariants = await KeywordVariant.findAll({ where: { keyword_id: keyword.id } });
-        if (keywordVariants.length > 0) {
-          const { matched } = matchVariant(product.title, keywordVariants);
-          console.log(`🔬 [バリアント判定] "${product.title}" → ${matched ? matched.variant_name + '(' + matched.item_code + ')' : '未マッチ（全バリアント）'}`);
-        }
-      } catch (_varErr) { /* モデル未反映時も通知は継続 */ }
-
       try {
         await this.lineNotificationService.notifyPurchaseAlert({
-          product, keyword, master, crossmallInfo,
+          product, keyword, master, crossmallInfo: productCrossmallInfo,
           expiryMonths: filterResult.expiryMonths,
           hoursOld:     filterResult.hoursOld,
           stockDisplay, rarity,
           totalListingCount,
           setQty, unitPrice,
+          variantUnknown,
         });
         runLog(`  📱 LINE送信✅ [${keyword.keyword}/${platform}]: "${product.title}" ¥${product.price}`);
       } catch (notifyError) {
