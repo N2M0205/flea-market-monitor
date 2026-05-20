@@ -14,6 +14,10 @@
 function detectSetQuantity(title) {
   if (!title) return 1;
 
+  const normalized = title
+    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .replace(/　/g, ' ');
+
   const patterns = [
     /[×x×](\d+)/,
     /(\d+)個(?:セット|まとめ|入り)?/,
@@ -24,7 +28,7 @@ function detectSetQuantity(title) {
   ];
 
   for (const pattern of patterns) {
-    const match = title.match(pattern);
+    const match = normalized.match(pattern);
     if (match) {
       const n = parseInt(match[1], 10);
       if (n >= 2 && n <= 10) return n;
