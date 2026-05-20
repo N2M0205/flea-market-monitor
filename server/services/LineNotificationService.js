@@ -145,9 +145,10 @@ class LineNotificationService {
 
   // ② 通知テキスト組み立て（新フォーマット）
   buildPurchaseAlertText(params) {
-    const { product, master, crossmallInfo, totalListingCount, purchasingCount, purchaseHistory } = params;
+    const { product, master, crossmallInfo, totalListingCount, purchasingCount, purchaseHistory, setQty, unitPrice } = params;
 
     const price         = Number(product?.price) || 0;
+    const effectivePrice = (setQty > 1 && unitPrice > 0) ? unitPrice : price;
     const stock         = crossmallInfo?.stock  != null ? crossmallInfo.stock : (master?.stock ?? null);
     const sales28       = (crossmallInfo?.sales28 != null && crossmallInfo.sales28 > 0)
       ? crossmallInfo.sales28
@@ -185,26 +186,31 @@ class LineNotificationService {
 
     let judgement = '';
     let profitRate = 0;
-    if (lastSalePrice != null && price > 0) {
-      const profit = calcProfit(lastSalePrice, shippingCost, price);
+    if (lastSalePrice != null && effectivePrice > 0) {
+      const profit = calcProfit(lastSalePrice, shippingCost, effectivePrice);
       profitRate = (profit / lastSalePrice) * 100;
       judgement = calcJudgement(profitRate, sales7 ?? 0, stockDays, rarityObj?.label ?? '');
     }
 
     let profitLine = '';
-    if (lastSalePrice != null && price > 0) {
-      const profit = calcProfit(lastSalePrice, shippingCost, price);
+    if (lastSalePrice != null && effectivePrice > 0) {
+      const profit = calcProfit(lastSalePrice, shippingCost, effectivePrice);
       const pr = profitRate.toFixed(1);
       const emoji = profit >= 0 ? '✅' : '⚠️';
       const sign = profit >= 0 ? '+' : '';
       profitLine = `${emoji} 利益見込み ${sign}¥${profit.toLocaleString()}（送料¥${shippingCost}）利益率${pr}%`;
     }
 
+    // 価格表示：セット商品は単価情報を付記
+    const priceDisp = (setQty > 1 && unitPrice > 0)
+      ? `¥${price.toLocaleString()}（${setQty}個セット → 単価¥${unitPrice.toLocaleString()}）`
+      : `¥${price.toLocaleString()}`;
+
     const lines = [
       judgement || '🤔 検討',
       '',
       `🛒 ${product?.title || '─'}`,
-      `¥${price.toLocaleString()}`,
+      priceDisp,
       `🔗 ${product?.url || '─'}`,
       '',
       `📦 在庫${stock != null ? stock : '─'}個 | 28日${sales28 != null ? sales28 : '─'}個 | 7日${sales7 != null ? sales7 : '─'}個 | 最終${lastSaleDateDisp}`,

@@ -14,6 +14,7 @@ const LineNotificationService  = require('./LineNotificationService');
 const { loadLayerAConfig, layerAFilter, calcRarityScore } = require('./LayerAFilterService');
 const CrossmallDbService = require('./CrossmallDbService');
 const { log: runLog } = require('../src/utils/RunLogger');
+const { detectSetQuantity } = require('../utils/priceUtils');
 
 // ============================================================
 // タイトルフィルタ ユーティリティ
@@ -454,6 +455,13 @@ class ScrapingService {
         }
       }
 
+      // セット商品の単価換算
+      const setQty   = detectSetQuantity(product.title);
+      const unitPrice = setQty > 1 ? Math.round(product.price / setQty) : product.price;
+      if (setQty > 1) {
+        console.log(`  📦 セット検出: "${product.title}" → ${setQty}個セット 単価¥${unitPrice.toLocaleString()}`);
+      }
+
       try {
         await this.lineNotificationService.notifyPurchaseAlert({
           product, keyword, master, crossmallInfo,
@@ -461,6 +469,7 @@ class ScrapingService {
           hoursOld:     filterResult.hoursOld,
           stockDisplay, rarity,
           totalListingCount,
+          setQty, unitPrice,
         });
         runLog(`  📱 LINE送信✅ [${keyword.keyword}/${platform}]: "${product.title}" ¥${product.price}`);
       } catch (notifyError) {
