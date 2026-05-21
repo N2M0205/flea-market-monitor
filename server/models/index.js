@@ -28,6 +28,9 @@ const CrossmallSale  = require('./CrossmallSale')(sequelize, DataTypes);
 // バリアントモデル
 const KeywordVariant = require('./KeywordVariant')(sequelize, DataTypes);
 
+// AUTOPROモデル
+const AutoproPurchase = require('./AutoproPurchase')(sequelize, DataTypes);
+
 // リレーションシップの定義
 // Users 1:N Keywords
 User.hasMany(Keyword, { foreignKey: 'user_id', as: 'keywords' });
@@ -92,6 +95,7 @@ const db = {
   CrossmallStock,
   CrossmallSale,
   KeywordVariant,
+  AutoproPurchase,
 };
 
 module.exports = db;
