@@ -40,6 +40,10 @@ app.use('/api/line',     lineRouter);
 // ★ 追加2: sync ルート登録
 app.use('/api/sync', syncRouter);
 
+// AUTOPRO Webhook
+const autoproRouter = require('./routes/autopro');
+app.use('/api/autopro', autoproRouter);
+
 // 設定ルート登録
 const settingsRouter = require('./routes/settings');
 app.use('/api/settings', settingsRouter);
