@@ -60,7 +60,13 @@ class MercariPuppeteerScraper {
     }
     if (pid) {
       try {
-        process.kill(pid, 'SIGKILL');
+        if (process.platform === 'win32') {
+          // Windows: taskkill で子プロセスごと強制終了
+          execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+        } else {
+          // Linux/Mac: SIGKILL
+          process.kill(pid, 'SIGKILL');
+        }
         console.log(`Force killed browser process PID: ${pid}`);
       } catch (killErr) {
         console.error('Force kill also failed:', killErr.message);
