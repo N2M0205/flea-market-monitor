@@ -495,7 +495,7 @@ class ScrapingService {
           : _sales28 === 0 ? Infinity
           : Math.round(_stock / (_sales28 / 28));
 
-        if (stockDays > 60 || stockDays === Infinity) {
+        if (stockDays > 25 || stockDays === Infinity) {
           const daysLabel = stockDays === Infinity ? '∞' : `${stockDays}日`;
           console.log(`  ⏭️ 過剰在庫のためスキップ: "${product.title}" (在庫日数: ${daysLabel})`);
           runLog(`  ⏭️ 過剰在庫スキップ [${keyword.keyword}/${platform}]: "${product.title}" 在庫日数: ${daysLabel}`);
