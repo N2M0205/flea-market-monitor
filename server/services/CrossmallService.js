@@ -293,12 +293,12 @@ class CrossmallService {
       const results = Array.isArray(resultSet.Result) ? resultSet.Result : [resultSet.Result];
       
       return results.map(r => {
-        const amountTotal = parseFloat(r.unit_price || r.UnitPrice || 0);
+        const unitPrice = parseFloat(r.unit_price || r.UnitPrice || 0);
         const qty = Math.max(1, parseInt(r.amount || r.Amount || 1));
         return {
           item_code: this.cleanItemCode(r.item_code || r.ItemCode || ''),
           amount: qty,
-          unit_price: Math.round(amountTotal / qty),
+          unit_price: Math.round(unitPrice),
           order_number: orderNumber
         };
       });
