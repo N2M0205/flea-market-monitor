@@ -91,6 +91,7 @@
 - 2026-05-19: LINE通知をpushMessage（グループ）→ broadcast に統一完了（fix/line-broadcast-unification）。LINE友達=バイヤーチームのみの運用のため全通知をbroadcastに統一。LineNotificationService から @line/bot-sdk の MessagingApiClient を廃止し fetch direct 方式（health-check.cjs と同方式）に統一。notifyPurchaseAlert(targetId, params) → notifyPurchaseAlert(params) にシグネチャ変更。LINE_GROUP_ID は .env でコメントアウト済み（値は保持）。line-test.js と LineService.js は旧テスト/Webhook管理用の別系統で今回スコープ外
 - 2026-05-21: MercariPuppeteerScraper._forceCloseBrowser() の Windows 対応完了（fix/chrome-process-leak, ec9f6dc）。process.kill(pid, 'SIGKILL') は Windows では動作しないため、process.platform === 'win32' 分岐を追加し execSync('taskkill /F /T /PID {pid}') に切り替え。/T フラグで子プロセスも含め強制終了。Linux/Mac は従来通り SIGKILL。require('child_process') は :10 でトップレベルインポート済みのため、メソッド内での二重 require は不要
 - 2026-05-22: ScrapingService.js の過剰在庫スキップ閾値を stockDays > 60 → stockDays > 25 に変更（a2f8951）。在庫日数26日以上の商品は通知しない。calcJudgement() の❌スルー判定（在庫日数>60日）とは別ロジックで、通知自体をスキップする上流フィルタ
+- 2026-05-25: Yahoo!フリマ商品状態（condition）は検索結果カードのDOMに表示されない。__NEXT_DATA__.props.initialState.searchState.search.result.items[].condition に文字列コード（new/used10/used20/used40/used60/used80）で格納。item.id が URL の /item/{id} と一致するので id でマップを作りDOMの商品IDと照合する方式（e7579c4）。URLパラメータによる新品フィルタは不可（全候補試して全件同一結果）
 
 ## 既知の未解決課題
 1. LINE通知未着（ログ上は送信成功だが届かないケースあり）
