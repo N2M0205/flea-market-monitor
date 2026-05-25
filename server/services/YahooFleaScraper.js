@@ -191,6 +191,31 @@ class YahooFleaScraper {
         await page.waitForSelector('a[href*="/item/"]', { timeout: 10000 });
 
         products = await page.evaluate((minPrice, maxPrice) => {
+          // ── __NEXT_DATA__ から商品状態マップ取得 ──────────────────
+          // Yahoo!フリマはNext.js SPA。__NEXT_DATA__.props.initialState.searchState.search.result.items[]
+          // に item.id (= URL の /item/{id}) と item.condition (コード文字列) が含まれている
+          const CONDITION_CODE_MAP = {
+            'new':    '新品、未使用',
+            'used10': '未使用に近い',
+            'used20': '目立った傷や汚れなし',
+            'used30': 'やや傷や汚れあり',
+            'used40': 'やや傷や汚れあり',
+            'used50': '傷や汚れあり',
+            'used60': '傷や汚れあり',
+            'used70': '全体的に状態が悪い',
+            'used80': '全体的に状態が悪い',
+          };
+          const conditionMap = {};
+          try {
+            const nd = JSON.parse(document.getElementById('__NEXT_DATA__').textContent);
+            const ndItems = nd?.props?.initialState?.searchState?.search?.result?.items || [];
+            for (const ndItem of ndItems) {
+              if (ndItem.id && ndItem.condition) {
+                conditionMap[ndItem.id] = CONDITION_CODE_MAP[ndItem.condition] || ndItem.condition;
+              }
+            }
+          } catch (_) {}
+
           const items = [];
           const links = Array.from(document.querySelectorAll('a[href*="/item/"]'));
 
@@ -256,9 +281,8 @@ class YahooFleaScraper {
               const stmMatch = dataClParams.match(/stm=(\d+)/);
               const stm = stmMatch ? parseInt(stmMatch[1]) : null;
 
-              // 商品状態ラベルの取得（複数セレクタを試みる）
-              const condEl = card.querySelector('[class*="condition" i], [class*="Condition"], [data-testid="condition"], [class*="item-condition"], [class*="itemCondition"]');
-              const condition = condEl?.textContent?.trim() || null;
+              // 商品状態: __NEXT_DATA__ の id→condition マップから取得
+              const condition = conditionMap[productId] || null;
 
               if (productId && title && price !== '0' && url) {
                 items.push({ product_id: productId, title, price, url, image_url: imageUrl, stm, condition });
@@ -285,6 +309,29 @@ class YahooFleaScraper {
 
         try {
           products = await page.evaluate((minPrice, maxPrice) => {
+            // ── __NEXT_DATA__ から商品状態マップ取得 ──────────────────
+            const CONDITION_CODE_MAP = {
+              'new':    '新品、未使用',
+              'used10': '未使用に近い',
+              'used20': '目立った傷や汚れなし',
+              'used30': 'やや傷や汚れあり',
+              'used40': 'やや傷や汚れあり',
+              'used50': '傷や汚れあり',
+              'used60': '傷や汚れあり',
+              'used70': '全体的に状態が悪い',
+              'used80': '全体的に状態が悪い',
+            };
+            const conditionMap2 = {};
+            try {
+              const nd = JSON.parse(document.getElementById('__NEXT_DATA__').textContent);
+              const ndItems = nd?.props?.initialState?.searchState?.search?.result?.items || [];
+              for (const ndItem of ndItems) {
+                if (ndItem.id && ndItem.condition) {
+                  conditionMap2[ndItem.id] = CONDITION_CODE_MAP[ndItem.condition] || ndItem.condition;
+                }
+              }
+            } catch (_) {}
+
             const items  = [];
             const images = Array.from(document.querySelectorAll('img[alt]'));
 
@@ -332,9 +379,8 @@ class YahooFleaScraper {
                 const stmMatch2 = dataClParams2.match(/stm=(\d+)/);
                 const stm2 = stmMatch2 ? parseInt(stmMatch2[1]) : null;
 
-                // 商品状態ラベルの取得
-                const condEl2 = card.querySelector('[class*="condition" i], [class*="Condition"], [data-testid="condition"], [class*="item-condition"], [class*="itemCondition"]');
-                const condition2 = condEl2?.textContent?.trim() || null;
+                // 商品状態: __NEXT_DATA__ の id→condition マップから取得
+                const condition2 = conditionMap2[productId] || null;
 
                 if (productId && title && price !== '0') {
                   items.push({

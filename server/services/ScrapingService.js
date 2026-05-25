@@ -383,8 +383,9 @@ class ScrapingService {
       });
       if (!created) continue;
 
-      newProducts.push({ ...saved.toJSON(), description: item.description || '' });
-      console.log(`  ✨ 新規商品: "${item.title}" (¥${item.price})`);
+      newProducts.push({ ...saved.toJSON(), description: item.description || '', condition: item.condition || null });
+      const condLabel = item.condition ? ` [状態: ${item.condition}]` : '';
+      console.log(`  ✨ 新規商品: "${item.title}" (¥${item.price})${condLabel}`);
       runLog(`  ✨ 新着 [${keyword.keyword}/${platform}]: "${item.title}" ¥${item.price}`);
     }
 
