@@ -379,11 +379,12 @@ class ScrapingService {
           price:     item.price,
           url:       item.url,
           image_url: item.image_url,
+          listed_at: item.listed_at || null,
         },
       });
       if (!created) continue;
 
-      newProducts.push({ ...saved.toJSON(), description: item.description || '', condition: item.condition || null });
+      newProducts.push({ ...saved.toJSON(), description: item.description || '', condition: item.condition || null, listed_at: item.listed_at || saved.listed_at });
       const condLabel = item.condition ? ` [状態: ${item.condition}]` : '';
       console.log(`  ✨ 新規商品: "${item.title}" (¥${item.price})${condLabel}`);
       runLog(`  ✨ 新着 [${keyword.keyword}/${platform}]: "${item.title}" ¥${item.price}`);
