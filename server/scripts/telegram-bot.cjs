@@ -348,9 +348,22 @@ async function handleList(chatId) {
       return;
     }
 
+    const CHUNK_LIMIT = 4000;
     const lines = keywords.map((kw, i) => formatKeyword(kw, i));
-    const text = `📋 監視キーワード一覧（${keywords.length}件）\n\n${lines.join('\n\n')}`;
-    await replyWithKeyboard(chatId, text);
+    const header = `📋 監視キーワード一覧（${keywords.length}件）\n\n`;
+    let chunk = header;
+
+    for (const line of lines) {
+      const sep = chunk === header ? '' : '\n\n';
+      if ((chunk + sep + line).length > CHUNK_LIMIT) {
+        await bot.sendMessage(chatId, chunk);
+        chunk = line;
+      } else {
+        chunk += sep + line;
+      }
+    }
+
+    await replyWithKeyboard(chatId, chunk);
   } catch (err) {
     console.error('[telegram-bot] 一覧取得エラー:', err.message);
     await replyWithKeyboard(chatId, `❌ エラー: ${err.message}`);
