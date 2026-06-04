@@ -118,78 +118,82 @@ bot.on('message', async (msg) => {
 
   console.log(`[受信] from=${userId} chat=${chatId} text="${text}"`);
 
-  // TELEGRAM_ADMIN_ID 未設定: 最初のメッセージで ID を案内
-  if (!ADMIN_ID) {
-    await bot.sendMessage(
-      chatId,
-      `あなたのTelegram IDは ${userId} です。\n.envのTELEGRAM_ADMIN_IDにこの値を設定してください`
-    );
-    return;
-  }
+  try {
+    // TELEGRAM_ADMIN_ID 未設定: 最初のメッセージで ID を案内
+    if (!ADMIN_ID) {
+      await bot.sendMessage(
+        chatId,
+        `あなたのTelegram IDは ${userId} です。\n.envのTELEGRAM_ADMIN_IDにこの値を設定してください`
+      );
+      return;
+    }
 
-  // 認可チェック
-  if (userId !== ADMIN_ID) return;
+    // 認可チェック
+    if (userId !== ADMIN_ID) return;
 
-  // キャンセル
-  if (text === '❌ キャンセル' || text === '/cancel') {
-    userStates.delete(userId);
-    await replyWithKeyboard(chatId, 'キャンセルしました');
-    return;
-  }
+    // キャンセル
+    if (text === '❌ キャンセル' || text === '/cancel') {
+      userStates.delete(userId);
+      await replyWithKeyboard(chatId, 'キャンセルしました');
+      return;
+    }
 
-  // /start
-  if (text === '/start') {
-    userStates.delete(userId);
-    await replyWithKeyboard(chatId, 'ピコフリ管理Bot へようこそ！\n操作を選択してください。');
-    return;
-  }
+    // /start
+    if (text === '/start') {
+      userStates.delete(userId);
+      await replyWithKeyboard(chatId, 'ピコフリ管理Bot へようこそ！\n操作を選択してください。');
+      return;
+    }
 
-  // メインメニューボタン（フロー中でも割り込み可能 → 状態リセット）
-  if (text === '📋 一覧') {
-    userStates.delete(userId);
-    await handleList(chatId);
-    return;
-  }
-  if (text === '➕ 追加') {
-    userStates.delete(userId);
-    await handleAddStart(chatId, userId);
-    return;
-  }
-  if (text === '🗑 削除') {
-    userStates.delete(userId);
-    await handleDeleteStart(chatId);
-    return;
-  }
-  if (text === '🚫 除外設定') {
-    userStates.delete(userId);
-    await handleExcludeStart(chatId);
-    return;
-  }
-  if (text === '💰 価格設定') {
-    userStates.delete(userId);
-    await handlePriceStart(chatId);
-    return;
-  }
-  if (text === '🧬 バリアント') {
-    userStates.delete(userId);
-    await handleVariantStart(chatId);
-    return;
-  }
-  if (text === '📦 在庫') {
-    userStates.delete(userId);
-    await handleInventory(chatId);
-    return;
-  }
-  if (text === '📊 ステータス') {
-    userStates.delete(userId);
-    await handleStatus(chatId);
-    return;
-  }
+    // メインメニューボタン（フロー中でも割り込み可能 → 状態リセット）
+    if (text === '📋 一覧') {
+      userStates.delete(userId);
+      await handleList(chatId);
+      return;
+    }
+    if (text === '➕ 追加') {
+      userStates.delete(userId);
+      await handleAddStart(chatId, userId);
+      return;
+    }
+    if (text === '🗑 削除') {
+      userStates.delete(userId);
+      await handleDeleteStart(chatId);
+      return;
+    }
+    if (text === '🚫 除外設定') {
+      userStates.delete(userId);
+      await handleExcludeStart(chatId);
+      return;
+    }
+    if (text === '💰 価格設定') {
+      userStates.delete(userId);
+      await handlePriceStart(chatId);
+      return;
+    }
+    if (text === '🧬 バリアント') {
+      userStates.delete(userId);
+      await handleVariantStart(chatId);
+      return;
+    }
+    if (text === '📦 在庫') {
+      userStates.delete(userId);
+      await handleInventory(chatId);
+      return;
+    }
+    if (text === '📊 ステータス') {
+      userStates.delete(userId);
+      await handleStatus(chatId);
+      return;
+    }
 
-  // 会話フロー中の入力処理
-  const state = userStates.get(userId);
-  if (state) {
-    await handleStateFlow(chatId, userId, text, state);
+    // 会話フロー中の入力処理
+    const state = userStates.get(userId);
+    if (state) {
+      await handleStateFlow(chatId, userId, text, state);
+    }
+  } catch (err) {
+    console.error('[telegram-bot] メッセージ処理エラー:', err.message);
   }
 });
 
@@ -206,6 +210,8 @@ bot.on('callback_query', async (query) => {
   if (!ADMIN_ID || userId !== ADMIN_ID) return;
 
   const state = userStates.get(userId) || { step: 'idle' };
+
+  try {
 
   // ─── 追加フロー ───
   if (data === 'skip_sku') {
@@ -330,6 +336,9 @@ bot.on('callback_query', async (query) => {
   } else if (data === 'cancel') {
     userStates.delete(userId);
     await replyWithKeyboard(chatId, 'キャンセルしました');
+  }
+  } catch (err) {
+    console.error('[telegram-bot] コールバック処理エラー:', err.message);
   }
 });
 
