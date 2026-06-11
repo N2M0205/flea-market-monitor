@@ -24,5 +24,9 @@ server/debug-*.png
 tmp_*
 *.gdoc
 
+# バックアップファイル
+*.bak_*
+data/*.bak_*
+
 # Claude Code ローカルキャッシュ
 .claude/scheduled_tasks.lock

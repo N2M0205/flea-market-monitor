@@ -96,7 +96,11 @@ function getProcessStartTime(pid) {
 
 function killProcess(pid) {
   try {
-    execSync(`taskkill /F /PID ${pid}`, { encoding: 'utf-8' });
+    if (process.platform === 'win32') {
+      execSync(`taskkill /F /T /PID ${pid}`, { encoding: 'utf-8' });
+    } else {
+      process.kill(pid, 'SIGKILL');
+    }
     return true;
   } catch {
     return false;

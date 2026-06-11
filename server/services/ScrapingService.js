@@ -167,7 +167,11 @@ class ScrapingService {
               const elapsed = now - new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}`).getTime();
               if (elapsed >= LEAK_THRESHOLD_MS) {
                 try {
-                  execSync(`taskkill /F /PID ${pid}`, { encoding: 'utf-8' });
+                  if (process.platform === 'win32') {
+                    execSync(`taskkill /F /T /PID ${pid}`, { encoding: 'utf-8' });
+                  } else {
+                    process.kill(pid, 'SIGKILL');
+                  }
                   killedChrome++;
                   console.log(`🧹 ゾンビChrome kill: PID ${pid}（${Math.round(elapsed / 1000)}秒経過）`);
                 } catch (_) {}
