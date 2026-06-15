@@ -32,14 +32,14 @@ function getPm2BackendPid() {
 function getChildPids(parentPid) {
   if (!parentPid) return new Set();
   try {
+    // WMICはUTF-16LE出力のためPowerShellで代替
     const raw = execSync(
-      `wmic process where (ParentProcessId=${parentPid}) get ProcessId /format:csv`,
-      { encoding: 'utf-8' }
+      `powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'ParentProcessId=${parentPid}' | Select-Object -ExpandProperty ProcessId"`,
+      { encoding: 'utf-8', timeout: 8000 }
     );
     const pids = new Set();
     for (const line of raw.split('\n')) {
-      const parts = line.trim().split(',');
-      const pid = parseInt(parts[parts.length - 1], 10);
+      const pid = parseInt(line.trim(), 10);
       if (pid) pids.add(pid);
     }
     return pids;
@@ -74,21 +74,15 @@ function getChromeProcesses() {
 
 function getProcessStartTime(pid) {
   try {
+    // WMICはUTF-16LE出力でパース失敗するためPowerShellで代替
     const raw = execSync(
-      `wmic process where (ProcessId=${pid}) get CreationDate /format:csv`,
-      { encoding: 'utf-8' }
+      `powershell -NoProfile -Command "(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).StartTime.ToString('o')"`,
+      { encoding: 'utf-8', timeout: 8000 }
     );
-    for (const line of raw.split('\n')) {
-      const parts = line.trim().split(',');
-      const dateStr = parts[parts.length - 1];
-      // WMI CreationDate形式: 20260401123045.123456+540
-      const match = dateStr.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
-      if (match) {
-        const [, y, mo, d, h, mi, s] = match;
-        return new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}`);
-      }
-    }
-    return null;
+    const dateStr = raw.trim();
+    if (!dateStr || dateStr.length < 10) return null;
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
   } catch {
     return null;
   }

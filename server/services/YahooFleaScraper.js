@@ -18,6 +18,7 @@
 
 'use strict';
 
+const { execSync } = require('child_process');
 const puppeteerExtra = require('puppeteer-extra');
 const StealthPlugin  = require('puppeteer-extra-plugin-stealth');
 puppeteerExtra.use(StealthPlugin());
@@ -77,7 +78,11 @@ class YahooFleaScraper {
     }
     if (pid) {
       try {
-        process.kill(pid, 'SIGKILL');
+        if (process.platform === 'win32') {
+          execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+        } else {
+          process.kill(pid, 'SIGKILL');
+        }
         console.log(`Force killed browser process PID: ${pid}`);
       } catch (killErr) {
         console.error('Force kill also failed:', killErr.message);
@@ -85,7 +90,7 @@ class YahooFleaScraper {
     }
   }
 
-  async _closeBrowser(browser, timeoutMs = 5000) {
+  async _closeBrowser(browser, timeoutMs = 3000) {
     try {
       await Promise.race([
         browser.close(),

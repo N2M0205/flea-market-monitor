@@ -74,7 +74,7 @@ class MercariPuppeteerScraper {
     }
   }
 
-  async _closeBrowser(browser, timeoutMs = 5000) {
+  async _closeBrowser(browser, timeoutMs = 3000) {
     try {
       await Promise.race([
         browser.close(),
