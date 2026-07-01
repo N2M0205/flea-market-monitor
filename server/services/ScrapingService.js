@@ -16,6 +16,7 @@ const CrossmallDbService = require('./CrossmallDbService');
 const { log: runLog } = require('../src/utils/RunLogger');
 const { detectSetQuantity } = require('../utils/priceUtils');
 const { matchVariant }     = require('../utils/variantMatcher');
+const zombieTracker        = require('../utils/zombiePidTracker');
 
 // ============================================================
 // タイトルフィルタ ユーティリティ
@@ -171,6 +172,7 @@ class ScrapingService {
         const m = line.trim().match(/"chrome\.exe","(\d+)"/i);
         if (m) pids.push(parseInt(m[1], 10));
       }
+      zombieTracker.pruneResolvedEntries(pids); // 実際に消えているPIDの記録を掃除
 
       for (const pid of pids) {
         try {
@@ -184,8 +186,14 @@ class ScrapingService {
             const dm = dateStr.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
             if (dm) {
               const [, y, mo, d, h, mi, s] = dm;
-              const elapsed = now - new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}`).getTime();
+              const creationDate = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}`);
+              const creationTimeIso = creationDate.toISOString();
+              const elapsed = now - creationDate.getTime();
               if (elapsed >= LEAK_THRESHOLD_MS) {
+                if (zombieTracker.isKnownZombie(pid, creationTimeIso)) {
+                  console.log(`🧹 PID ${pid} は既知の無害ゾンビ（失敗${zombieTracker.FAIL_THRESHOLD}回以上）のためスキップ`);
+                  break;
+                }
                 const MAX_ATTEMPTS = 2; // 初回 + 再試行1回
                 for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
                   try {
@@ -196,16 +204,19 @@ class ScrapingService {
                     }
                     killedChrome++;
                     console.log(`🧹 ゾンビChrome kill: PID ${pid}（${Math.round(elapsed / 1000)}秒経過）`);
+                    zombieTracker.clearEntry(pid);
                     break;
                   } catch (killErr) {
                     if (!this._isPidAlive(pid)) {
                       console.log(`🧹 taskkill: PID ${pid} は既に終了済み（レース条件、正常終了）`);
+                      zombieTracker.clearEntry(pid);
                       break;
                     }
                     if (attempt < MAX_ATTEMPTS) {
                       console.warn(`⚠️ ゾンビChrome kill失敗（PID ${pid} 生存中）、再試行します: ${killErr.message}`);
                     } else {
-                      console.error(`❌ ゾンビChrome kill再試行も失敗。PID ${pid} がzombieとして残存する可能性: ${killErr.message}`);
+                      const failCount = zombieTracker.recordFailure(pid, creationTimeIso);
+                      console.error(`❌ ゾンビChrome kill再試行も失敗。PID ${pid} がzombieとして残存する可能性（累積失敗${failCount}回）: ${killErr.message}`);
                     }
                   }
                 }

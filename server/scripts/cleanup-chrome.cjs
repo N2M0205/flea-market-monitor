@@ -13,6 +13,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const zombieTracker = require('../utils/zombiePidTracker');
 
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5分（孤立プロセス判定）
 const LEAK_THRESHOLD_MS  = 3 * 60 * 1000; // 3分（backend子プロセスのリーク判定）
@@ -108,7 +109,12 @@ function isPidAlive(pid) {
   }
 }
 
-function killProcess(pid) {
+function killProcess(pid, creationTimeIso) {
+  if (zombieTracker.isKnownZombie(pid, creationTimeIso)) {
+    console.log(`[chrome-cleanup] PID ${pid} は既知の無害ゾンビ（失敗${zombieTracker.FAIL_THRESHOLD}回以上）のためスキップ`);
+    return false;
+  }
+
   const MAX_ATTEMPTS = 2; // 初回 + 再試行1回
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
@@ -117,16 +123,19 @@ function killProcess(pid) {
       } else {
         process.kill(pid, 'SIGKILL');
       }
+      zombieTracker.clearEntry(pid);
       return true;
     } catch (killErr) {
       if (!isPidAlive(pid)) {
         console.log(`[chrome-cleanup] taskkill: PID ${pid} は既に終了済み（レース条件、正常終了）`);
+        zombieTracker.clearEntry(pid);
         return true;
       }
       if (attempt < MAX_ATTEMPTS) {
         console.warn(`[chrome-cleanup] Force kill失敗（PID ${pid} 生存中）、再試行します: ${killErr.message}`);
       } else {
-        console.error(`[chrome-cleanup] Force kill再試行も失敗。PID ${pid} がzombieとして残存する可能性: ${killErr.message}`);
+        const failCount = zombieTracker.recordFailure(pid, creationTimeIso);
+        console.error(`[chrome-cleanup] Force kill再試行も失敗。PID ${pid} がzombieとして残存する可能性（累積失敗${failCount}回）: ${killErr.message}`);
       }
     }
   }
@@ -146,6 +155,8 @@ function main() {
   }
 
   const chromePids = getChromeProcesses();
+  zombieTracker.pruneResolvedEntries(chromePids); // 実際に消えているPIDの記録を掃除
+
   if (chromePids.length === 0) {
     console.log('[chrome-cleanup] chrome.exeプロセスなし。クリーンアップ不要');
     return;
@@ -184,7 +195,7 @@ function main() {
       console.log(`[chrome-cleanup] 孤立プロセスkill: PID ${pid}（起動${elapsedSec}秒）`);
     }
 
-    if (killProcess(pid)) {
+    if (killProcess(pid, startTime.toISOString())) {
       killed++;
     }
   }

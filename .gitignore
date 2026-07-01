@@ -16,6 +16,7 @@ data/inventory_alert_history.json
 data/crossmall_sales_history.json
 data/purchase_master_cache.json
 data/health_check_state.json
+data/known_zombie_pids.json
 
 # デバッグ用スクリーンショット
 server/debug-*.png
