@@ -69,6 +69,26 @@ class YahooFleaScraper {
     return browser;
   }
 
+  // taskkillは対象PIDツリーの一部が既に終了済みだと非ゼロ終了コードを返す（Windows仕様）。
+  // そのため失敗時はtasklistで実際の生死を確認し、レース条件（既に消えている）と
+  // 本当のkill失敗を区別する。
+  _isPidAlive(pid) {
+    if (process.platform === 'win32') {
+      try {
+        const out = execSync(`tasklist /FI "PID eq ${pid}" /NH`, { encoding: 'utf8' });
+        return out.includes(String(pid));
+      } catch (_) {
+        return false;
+      }
+    }
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   _forceCloseBrowser(browser) {
     let pid;
     try {
@@ -76,7 +96,10 @@ class YahooFleaScraper {
     } catch (pidErr) {
       console.error('Failed to get browser PID:', pidErr.message);
     }
-    if (pid) {
+    if (!pid) return;
+
+    const MAX_ATTEMPTS = 2; // 初回 + 再試行1回
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         if (process.platform === 'win32') {
           execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
@@ -84,8 +107,17 @@ class YahooFleaScraper {
           process.kill(pid, 'SIGKILL');
         }
         console.log(`Force killed browser process PID: ${pid}`);
+        return;
       } catch (killErr) {
-        console.error('Force kill also failed:', killErr.message);
+        if (!this._isPidAlive(pid)) {
+          console.log(`taskkill: PID ${pid} は既に終了済み（レース条件、正常終了）`);
+          return;
+        }
+        if (attempt < MAX_ATTEMPTS) {
+          console.warn(`Force kill失敗（PID ${pid} 生存中）、再試行します: ${killErr.message}`);
+        } else {
+          console.error(`Force kill再試行も失敗。PID ${pid} がzombieとして残存する可能性: ${killErr.message}`);
+        }
       }
     }
   }
