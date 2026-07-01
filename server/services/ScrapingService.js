@@ -137,6 +137,26 @@ class ScrapingService {
     return this.isRunning;
   }
 
+  // taskkillは対象PIDツリーの一部が既に終了済みだと非ゼロ終了コードを返す（Windows仕様）。
+  // そのため失敗時はtasklistで実際の生死を確認し、レース条件（既に消えている）と
+  // 本当のkill失敗を区別する。
+  _isPidAlive(pid) {
+    if (process.platform === 'win32') {
+      try {
+        const out = execSync(`tasklist /FI "PID eq ${pid}" /NH`, { encoding: 'utf-8' });
+        return out.includes(String(pid));
+      } catch {
+        return false;
+      }
+    }
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async _cleanupZombieBrowsers() {
     const LEAK_THRESHOLD_MS = 3 * 60 * 1000; // 3分超 = ゾンビ判定
     const now = Date.now();
@@ -166,15 +186,29 @@ class ScrapingService {
               const [, y, mo, d, h, mi, s] = dm;
               const elapsed = now - new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}`).getTime();
               if (elapsed >= LEAK_THRESHOLD_MS) {
-                try {
-                  if (process.platform === 'win32') {
-                    execSync(`taskkill /F /T /PID ${pid}`, { encoding: 'utf-8' });
-                  } else {
-                    process.kill(pid, 'SIGKILL');
+                const MAX_ATTEMPTS = 2; // 初回 + 再試行1回
+                for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                  try {
+                    if (process.platform === 'win32') {
+                      execSync(`taskkill /F /T /PID ${pid}`, { encoding: 'utf-8' });
+                    } else {
+                      process.kill(pid, 'SIGKILL');
+                    }
+                    killedChrome++;
+                    console.log(`🧹 ゾンビChrome kill: PID ${pid}（${Math.round(elapsed / 1000)}秒経過）`);
+                    break;
+                  } catch (killErr) {
+                    if (!this._isPidAlive(pid)) {
+                      console.log(`🧹 taskkill: PID ${pid} は既に終了済み（レース条件、正常終了）`);
+                      break;
+                    }
+                    if (attempt < MAX_ATTEMPTS) {
+                      console.warn(`⚠️ ゾンビChrome kill失敗（PID ${pid} 生存中）、再試行します: ${killErr.message}`);
+                    } else {
+                      console.error(`❌ ゾンビChrome kill再試行も失敗。PID ${pid} がzombieとして残存する可能性: ${killErr.message}`);
+                    }
                   }
-                  killedChrome++;
-                  console.log(`🧹 ゾンビChrome kill: PID ${pid}（${Math.round(elapsed / 1000)}秒経過）`);
-                } catch (_) {}
+                }
               }
               break;
             }

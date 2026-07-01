@@ -88,17 +88,49 @@ function getProcessStartTime(pid) {
   }
 }
 
-function killProcess(pid) {
-  try {
-    if (process.platform === 'win32') {
-      execSync(`taskkill /F /T /PID ${pid}`, { encoding: 'utf-8' });
-    } else {
-      process.kill(pid, 'SIGKILL');
+// taskkillは対象PIDツリーの一部が既に終了済みだと非ゼロ終了コードを返す（Windows仕様）。
+// そのため失敗時はtasklistで実際の生死を確認し、レース条件（既に消えている）と
+// 本当のkill失敗を区別する。
+function isPidAlive(pid) {
+  if (process.platform === 'win32') {
+    try {
+      const out = execSync(`tasklist /FI "PID eq ${pid}" /NH`, { encoding: 'utf-8' });
+      return out.includes(String(pid));
+    } catch {
+      return false;
     }
+  }
+  try {
+    process.kill(pid, 0);
     return true;
   } catch {
     return false;
   }
+}
+
+function killProcess(pid) {
+  const MAX_ATTEMPTS = 2; // 初回 + 再試行1回
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      if (process.platform === 'win32') {
+        execSync(`taskkill /F /T /PID ${pid}`, { encoding: 'utf-8' });
+      } else {
+        process.kill(pid, 'SIGKILL');
+      }
+      return true;
+    } catch (killErr) {
+      if (!isPidAlive(pid)) {
+        console.log(`[chrome-cleanup] taskkill: PID ${pid} は既に終了済み（レース条件、正常終了）`);
+        return true;
+      }
+      if (attempt < MAX_ATTEMPTS) {
+        console.warn(`[chrome-cleanup] Force kill失敗（PID ${pid} 生存中）、再試行します: ${killErr.message}`);
+      } else {
+        console.error(`[chrome-cleanup] Force kill再試行も失敗。PID ${pid} がzombieとして残存する可能性: ${killErr.message}`);
+      }
+    }
+  }
+  return false;
 }
 
 function main() {
