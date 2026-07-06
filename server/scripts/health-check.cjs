@@ -9,7 +9,8 @@
  *   - メモリ使用率 (92% / 97%)
  *   - Chrome プロセス数 (70個/100個)
  *   - SearchIndexer メモリ使用量 (500MB超で警告。本来Disabled済みだが再発検知用)
- *   - msedgewebview2 メモリ使用量 (800MB超で警告。1個あたりの最大値)
+ *   - msedgewebview2 メモリ使用量 (800MB超で警告。1個あたりの最大値。
+ *     3回連続警告後は条件解消までLINE通知を間引く)
  *   - PM2 picofuri-backend の status (online以外)
  *   - picofuri-backend 再起動回数 (30分間で5回以上)
  *   - スクレイピング成功率 (Mercari 50%/25%, Yahoo 80%, 処理時間600秒)
@@ -51,6 +52,22 @@ function saveState(state) {
   } catch (err) {
     console.warn(`状態ファイル保存失敗: ${err.message}`);
   }
+}
+
+// 連続警告カウント（同一項目が続けて閾値超過した場合の通知間引き用）
+function incrementConsecutiveWarning(label) {
+  const state = loadState();
+  const counts = state.consecutiveWarnings || {};
+  const count = (counts[label] || 0) + 1;
+  saveState({ ...state, consecutiveWarnings: { ...counts, [label]: count } });
+  return count;
+}
+
+function resetConsecutiveWarning(label) {
+  const state = loadState();
+  const counts = state.consecutiveWarnings || {};
+  if (!counts[label]) return;
+  saveState({ ...state, consecutiveWarnings: { ...counts, [label]: 0 } });
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -216,8 +233,9 @@ function checkChromeProcesses() {
   }
 }
 
-function checkProcessMemory(processName, thresholdMB, note) {
+function checkProcessMemory(processName, thresholdMB, note, opts = {}) {
   const label = processName.replace(/\.exe$/i, '');
+  const { silenceAfter } = opts; // N回連続警告後、条件解消までLINE通知を間引く
   try {
     const raw = execSync(
       `tasklist /FI "IMAGENAME eq ${processName}" /FO CSV /NH`,
@@ -233,14 +251,23 @@ function checkProcessMemory(processName, thresholdMB, note) {
     }
 
     if (maxKB === 0) {
+      if (silenceAfter) resetConsecutiveWarning(label);
       return { ok: true, maxMB: 0, message: `✅ ${label}: 起動なし` };
     }
 
     const maxMB = maxKB / 1024;
     if (maxMB > thresholdMB) {
       const suffix = note ? `（${note}）` : '';
+      if (silenceAfter) {
+        const count = incrementConsecutiveWarning(label);
+        if (count > silenceAfter) {
+          return { ok: true, maxMB, message: `⚠️ ${label}: ${Math.round(maxMB)}MB${suffix}（サイレント中）` };
+        }
+      }
       return { ok: false, level: 'warning', maxMB, message: `⚠️ ${label}: ${Math.round(maxMB)}MB${suffix}` };
     }
+
+    if (silenceAfter) resetConsecutiveWarning(label);
     return { ok: true, maxMB, message: `✅ ${label}: ${Math.round(maxMB)}MB` };
   } catch (err) {
     return { ok: true, maxMB: 0, message: `${label}チェックエラー: ${err.message}` };
@@ -465,7 +492,7 @@ async function runHealthCheck() {
     checkMemory(),
     checkChromeProcesses(),
     checkProcessMemory('SearchIndexer.exe', 500, '再起動等で復活した可能性'),
-    checkProcessMemory('msedgewebview2.exe', 800),
+    checkProcessMemory('msedgewebview2.exe', 800, null, { silenceAfter: 3 }),
     pm2Result,
     restartResult,
     ...scrapeResults,
