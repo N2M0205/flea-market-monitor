@@ -8,6 +8,8 @@
  *   - Tempフォルダサイズ (10GB / 20GB)
  *   - メモリ使用率 (92% / 97%)
  *   - Chrome プロセス数 (70個/100個)
+ *   - SearchIndexer メモリ使用量 (500MB超で警告。本来Disabled済みだが再発検知用)
+ *   - msedgewebview2 メモリ使用量 (800MB超で警告。1個あたりの最大値)
  *   - PM2 picofuri-backend の status (online以外)
  *   - picofuri-backend 再起動回数 (30分間で5回以上)
  *   - スクレイピング成功率 (Mercari 50%/25%, Yahoo 80%, 処理時間600秒)
@@ -211,6 +213,37 @@ function checkChromeProcesses() {
       return { ok: true, count: 0, message: '✅ Chromeプロセス数: 0個' };
     }
     return { ok: true, count: 0, message: `Chromeチェックエラー: ${err.message}` };
+  }
+}
+
+function checkProcessMemory(processName, thresholdMB, note) {
+  const label = processName.replace(/\.exe$/i, '');
+  try {
+    const raw = execSync(
+      `tasklist /FI "IMAGENAME eq ${processName}" /FO CSV /NH`,
+      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+    );
+
+    let maxKB = 0;
+    for (const line of raw.split('\n')) {
+      if (!line.startsWith('"')) continue; // "INFO: No tasks..." 等はスキップ
+      const cols = line.split('","').map(c => c.replace(/"/g, '').trim());
+      const memKB = parseInt(cols[4]?.replace(/[^\d]/g, ''), 10);
+      if (!isNaN(memKB) && memKB > maxKB) maxKB = memKB;
+    }
+
+    if (maxKB === 0) {
+      return { ok: true, maxMB: 0, message: `✅ ${label}: 起動なし` };
+    }
+
+    const maxMB = maxKB / 1024;
+    if (maxMB > thresholdMB) {
+      const suffix = note ? `（${note}）` : '';
+      return { ok: false, level: 'warning', maxMB, message: `⚠️ ${label}: ${Math.round(maxMB)}MB${suffix}` };
+    }
+    return { ok: true, maxMB, message: `✅ ${label}: ${Math.round(maxMB)}MB` };
+  } catch (err) {
+    return { ok: true, maxMB: 0, message: `${label}チェックエラー: ${err.message}` };
   }
 }
 
@@ -431,6 +464,8 @@ async function runHealthCheck() {
     checkTemp(),
     checkMemory(),
     checkChromeProcesses(),
+    checkProcessMemory('SearchIndexer.exe', 500, '再起動等で復活した可能性'),
+    checkProcessMemory('msedgewebview2.exe', 800),
     pm2Result,
     restartResult,
     ...scrapeResults,
