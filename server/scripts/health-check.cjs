@@ -353,19 +353,41 @@ function checkScrapeStatus() {
     }
 
     // 末尾から最新の完了したスキャンを探す
+    // 開始/完了それぞれのログに含まれる「(スキャン #NNNN)」でスキャンIDを照合し、
+    // 同一スキャンの開始・完了ペアのみを対象とする。
+    // ※ SchedulerService側の「定期スクレイピング開始」ログはcron発火の度に
+    //   無条件で出力される（前回スキャン進行中でスキップされた場合も出る）ため
+    //   スキャンIDを含まない。IDを含む行のみを開始マーカーとして扱うことで、
+    //   スキップ時の空マーカーを誤って完了ログとペアリングしないようにする。
     let scanEndIdx = -1;
-    let scanStartIdx = -1;
+    let endScanId = null;
     for (let i = outLines.length - 1; i >= 0; i--) {
-      if (scanEndIdx === -1 && outLines[i].includes('全キーワードのスクレイピング完了')) {
+      const m = outLines[i].match(/全キーワードのスクレイピング完了.*\(スキャン #(\d+)\)/);
+      if (m) {
         scanEndIdx = i;
-      }
-      if (scanEndIdx !== -1 && outLines[i].includes('定期スクレイピング開始')) {
-        scanStartIdx = i;
+        endScanId = m[1];
         break;
       }
     }
 
-    if (scanStartIdx === -1 || scanEndIdx === -1) {
+    if (scanEndIdx === -1) {
+      return [{ ok: true, message: '📊 直近スキャン: データ取得不可（スキップ）' }];
+    }
+
+    let scanStartIdx = -1;
+    for (let i = scanEndIdx; i >= 0; i--) {
+      const m = outLines[i].match(/🤖 定期スクレイピング開始.*\(スキャン #(\d+)\)/);
+      if (m) {
+        if (m[1] === endScanId) {
+          scanStartIdx = i;
+        }
+        break;
+      }
+    }
+
+    if (scanStartIdx === -1) {
+      // 開始マーカーが見つからない、またはスキャンIDが完了ログと不一致
+      // （進行中スキップ等によるログの不整合）→ 誤検知防止のためスキップ扱い
       return [{ ok: true, message: '📊 直近スキャン: データ取得不可（スキップ）' }];
     }
 

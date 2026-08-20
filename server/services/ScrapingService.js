@@ -336,8 +336,8 @@ class ScrapingService {
       }
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      console.log(`\n✅ 全キーワードのスクレイピング完了（${keywords.length}件 / ${elapsed}秒）\n`);
-      runLog(`✅ 巡回完了: ${keywords.length}キーワード / ${elapsed}秒`);
+      console.log(`\n✅ 全キーワードのスクレイピング完了（${keywords.length}件 / ${elapsed}秒）(スキャン #${this.scanCount})\n`);
+      runLog(`✅ 巡回完了: ${keywords.length}キーワード / ${elapsed}秒 (スキャン #${this.scanCount})`);
 
       return { success: true, totalProducts: keywords.length, elapsed };
 
